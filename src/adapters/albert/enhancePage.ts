@@ -13,6 +13,7 @@ import { isAuxiliary, optionsForSectionGroup, readSectionGroup } from './section
 import { albertDescriptionSearchEvent, albertTitleSearchEvent } from './searchBridge';
 import { ALBERT_SELECTORS } from './selectors';
 import { applyTermPreference } from './termAdapter';
+import { ensureHomeToolbar } from './homeToolbar';
 
 let latestSettings: AlbertEnhancerSettings | undefined;
 
@@ -213,6 +214,11 @@ function ensureAbbreviationSearch(root: ParentNode): void {
 export function enhanceAlbertPage(root: ParentNode, settings: AlbertEnhancerSettings, planner?: PlannerData): void {
   latestSettings = settings;
   if (!settings.enabled) return;
+  ensureHomeToolbar(root, {
+    openScheduleLab: () => { void browser.runtime.sendMessage({ type: 'open-schedule-lab' }); },
+    openDegreePlanner: () => { void browser.runtime.sendMessage({ type: 'open-degree-planner' }); },
+    openSettings: () => { void browser.runtime.sendMessage({ type: 'open-settings' }); },
+  });
   applyTermPreference(root, settings.preferredTerm);
   applyCampusPreference(root, settings.campus);
   ensureAbbreviationSearch(root);

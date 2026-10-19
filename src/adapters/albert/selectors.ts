@@ -1,5 +1,6 @@
 /** Albert selectors live in one place so fixture regressions do not leak into features. */
 export const ALBERT_SELECTORS = {
+  homeSemesterGroup: '.isSSS_ShopCart.isSSS_CartByCareer',
   semesterTab: 'a[id^="IS_SSS_ShCtTm"][data-termclass]',
   campusSelect: '[data-ae-campus], [id="NYU_CLS_WRK2_DESCR254$33$"], #crit-camp, select[id*="campus" i], select[name*="campus" i]',
   courseSearchQuery: '[data-ae-search-query], #NYU_CLS_DERIVED_DESCR100, #NYU_CLS_DERIVED_DESCR100_JOB_POST1',

@@ -7,6 +7,7 @@ A Chrome extension that makes NYU Albert a little easier to use: fewer clicks, c
 ### Little things that save clicks
 
 - **Auto-select your semester tab**: Enter an Albert semester label, such as `Spring 2027`, in Settings → Default semester tab. The extension selects it when you open the shopping cart, and you can still switch tabs afterward. Leave it blank to turn this off; unavailable semesters leave the current tab alone.
+- **Home shortcuts**: Open Schedule Lab, Degree Planner, and Settings directly from the buttons above Albert's semester tabs.
 - **Auto-select your School**: Set a default School for Course Search. Open the logged-in Course Search once so the extension can pick up the actual School options, then choose one in Settings.
 - **Course abbreviation recognition**: Search with shortcuts like `ICS`, `DL`, `WAI`, or `POH`, and they expand into full course names, regardless of capitalization. Abbreviations in course information also get their full names added. You can add, edit, or disable your own shortcuts.
 - **Press Enter to search**: Hit Enter in the course title / instructor keyword field or the course description field to search. Abbreviations are expanded along the way.
@@ -34,6 +35,8 @@ npm run dev
 ```
 
 The production unpacked extension is written to `.output/chrome-mv3/` by `npm run build`.
+
+After reloading the extension on `chrome://extensions`, refresh any open Albert tabs (including the parent tab containing its iframes). Existing tabs can retain content scripts from the previous extension context; refreshing loads the current version. Clear old entries in the extension's Errors panel before checking again. If automatic semester selection fails or causes a `javascript:` CSP error, rebuild and reload the current version, which calls Albert's actual `IS.SSS.ShopCartTermSelect` entry and its display helpers through the MAIN-world bridge. Do not weaken the extension CSP to allow inline code.
 
 ## Architecture
 

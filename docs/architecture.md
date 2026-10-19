@@ -16,7 +16,7 @@ flowchart TB
   subgraph nyu["NYU HTTPS 页面及 iframe"]
     dom["Albert DOM / 页面函数"]
     content["content.ts · 隔离世界<br/>观察 DOM、加载设置、调用页面增强"]
-    main["albert-search-main.content.ts · MAIN 世界<br/>搜索提交与会话续期桥接"]
+    main["albert-search-main.content.ts · MAIN 世界<br/>搜索、学期选择与会话续期桥接"]
   end
   subgraph extension["Chrome 扩展"]
     popup["Popup · 导航入口"]
@@ -32,7 +32,7 @@ flowchart TB
   content -->|"解析与增强，经 Albert adapter"| dom
   content -->|"固定 DOM 事件"| main
   main -->|"桥接就绪事件"| content
-  main -->|"搜索 / resettimeout"| dom
+  main -->|"搜索 / ShopCartTermSelect / resettimeout"| dom
   content -->|"打开排课 / 设置消息，经 adapter"| background
   background --> planner
   background --> options
@@ -50,9 +50,10 @@ flowchart TB
 ```
 
 - 两个内容脚本均匹配 `https://*.nyu.edu/*`，启用 `allFrames`。匹配范围比 Albert 页面广；具体增强由选择器和页面内容判断。
-- `content.ts` 监听 DOM 变化和设置、排课存储变化；React 页面当前只在启动时读取存储，在本页操作后更新状态并写入，没有跨页面 `watch`。
-- MAIN 世界脚本调用 Albert 的 `submitAction_win0` 搜索函数，以及经过 URL 校验的会话续期流程。它不读取扩展存储。
+- `content.ts` 监听 DOM 变化和设置、排课存储变化；增强前检查 WXT context，失效后断开 observer、取消存储订阅并移除注入界面，异步初始化也在每次读取后检查有效性。React 页面当前只在启动时读取存储，在本页操作后更新状态并写入，没有跨页面 `watch`。
+- MAIN 世界脚本调用 Albert 的 `submitAction_win0` 搜索函数、`IS.SSS.ShopCartTermSelect` 学期函数，以及经过 URL 校验的会话续期流程。学期切换同时按页面原生顺序调用 `makeTablesResponsivePostLoad` 和 `DisplayToggleButton`；函数未就绪或学期元数据不一致时不确认请求。它不读取扩展存储。内容脚本不得通过 `.click()` 执行页面的 `javascript:` 链接。
 - 排课状态中的 `got-it`、`full`、`waitlisted` 是本地模拟事件，不向 Albert 提交注册操作。
+- Albert 首页在原生学期容器内部、标签之前显示靠右的 Schedule Lab、Degree Planner 和 Settings，不显示 Albert Enhancer 文字。三个按钮和扩展 Popup 共用 `styles/navigationButtons.css` 的紫底白字样式，圆角统一为 3px；这份样式只负责导航按钮外观，由两个宿主的 CSS 引入，宿主各自负责位置和排列。真实页面 `NYU_MAIN_2.css` 对学期区域按钮的颜色、边框、高度等使用 `!important`；共享样式以扩展专用选择器和相同优先级覆盖这些属性，保留原生按钮外观。真实规则的最小回归样本见 `tests/fixtures/albert/homepage-button-overrides.css`，验证见 `tests/features/navigationButtons.test.ts`。首页容器继承 Albert 的原生边距和宽度，避免在外部插入导致错位。`homeToolbar.ts` 负责 DOM、去重及回调；`enhancePage` 通过 runtime 消息打开页面，清理复用内容脚本生命周期。
 
 ## 2. 模块依赖与职责
 
@@ -140,7 +141,7 @@ flowchart LR
 
 学位规划是另一条独立流程：`DegreePlanEntry[]` + 所选 `curricula/nyush` 数据 → `evaluateCurriculum` / `dependencyWarnings` → 学位覆盖情况与先修提示 → `local:degree-plan`。目前它与排课数据没有自动同步。
 
-课表外观由 `features/planner/calendarAppearance.ts` 提供纯函数：按完整已存课程列表的顺序分配不同色相，以 course ID 复用到同门课的所有组件；切换候选计划不重新配色。颜色不写入存储，也没有自定义设置。组件标签统一使用小写缩写（lecture 为 `lec`、recitation 为 `reci`）；缺少班次显示信息时保留原 section ID。时间定位和地点简写仍由 `calendarLayout.ts` 负责。验证见 `tests/features/calendarAppearance.test.ts`。
+课表外观由 `features/planner/calendarAppearance.ts` 提供纯函数：`calendarCourseTitle` 显示课程名称，移除已存 `Course.title` 开头重复的对应 `Course.code`，兼容旧导入数据；缺少课程记录时回退到 course ID。方块只显示名称和组件，不显示时间行或地点；时间轴、方块的位置与高度、左侧课程列表及下方组件时间摘要保留，不修改已存课程、时间或地点数据。颜色按完整已存课程列表的顺序分配不同色相，以 course ID 复用到同门课的所有组件；切换候选计划不重新配色。颜色不写入存储，也没有自定义设置。组件标签统一使用小写缩写（lecture 为 `lec`、recitation 为 `reci`）；缺少班次显示信息时保留原 section ID。时间定位由 `calendarLayout.ts` 负责。验证见 `tests/features/calendarAppearance.test.ts` 和 `tests/e2e/extension.spec.ts`。
 
 ## 4. 本地状态与平台接口
 
@@ -157,7 +158,7 @@ flowchart LR
 
 平台接口只有三类：
 
-- 浏览器 runtime 消息 `open-schedule-lab`、`open-settings`：由 background 打开固定扩展页面；Popup 直接打开页面。
+- 浏览器 runtime 消息 `open-schedule-lab`、`open-degree-planner`、`open-settings`：由 background 打开固定扩展页面；Popup 直接打开页面。
 - Albert DOM 事件：固定搜索/续期请求与 bridge-ready 通知，具体契约见 [Albert README](../src/adapters/albert/README.md)。这些事件不能视作可信来源或授权凭证。
 - WXT storage 对 `chrome.storage.local` 的封装。业务计算不经由 background RPC，也没有后台排课服务。
 
@@ -179,5 +180,6 @@ flowchart LR
 - `npm test`：运行领域、adapter、feature、存储与架构测试；solver 性质测试对照穷举结果，builder 性质测试检查组合约束。
 - `tests/architecture/core-boundary.test.ts` 检查 core 平台词汇边界；`release-audit.test.ts` 检查权限、远程代码模式及排课性能。现有测试**不自动检查整个依赖图是否无环**。
 - `npm run test:e2e`：构建并在 Chromium 中验证扩展页面和 Albert fixture 流程。真实页面验证参见 [Manual checkpoint](MANUAL_CHECKPOINT_1.md)。
+- 不允许启动本地测试浏览器时，可用 ChatGPT 内置浏览器打开学期桥接回放页，验证 DOM 调用与手动选择行为；操作及验证边界见 [内置浏览器检查](../tests/browser/README.md)。
 
 新增模块、存储键、跨世界事件或数据通路时，同步更新本文件与模块 README；修改组件组合契约时，同时更新 [Schedule architecture](SCHEDULE_ARCHITECTURE.md) 和相关测试。

@@ -1,19 +1,40 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyTermPreference } from '../../src/adapters/albert/termAdapter';
+import { albertSelectTermEvent } from '../../src/adapters/albert/searchBridge';
 
-const fixture = readFileSync('tests/fixtures/albert/semester-tabs.html', 'utf8').replaceAll(' onclick="selectSemester(this)"', '');
+const fixture = readFileSync('tests/fixtures/albert/semester-tabs.html', 'utf8').replace(/ onclick="[^"]*"/g, '');
 
 describe('default semester tab', () => {
-  beforeEach(() => { document.body.innerHTML = fixture; });
+  let bridge: AbortController;
+  beforeEach(() => {
+    document.body.innerHTML = fixture;
+    bridge = new AbortController();
+    // Stand in for the MAIN handler's acknowledgement of the fixed request.
+    document.addEventListener(albertSelectTermEvent, (event) => { event.preventDefault(); }, { signal: bridge.signal });
+  });
+  afterEach(() => { bridge.abort(); });
 
-  it('clicks the exact configured term, normalizing case and whitespace', () => {
+  it('requests the exact configured term without clicking its javascript URL', () => {
     const spring = document.getElementById('IS_SSS_ShCtTm1274UGRDLnk')!;
     const clicked = vi.fn();
+    const requested = vi.fn();
     spring.addEventListener('click', clicked);
+    spring.addEventListener(albertSelectTermEvent, requested);
     expect(applyTermPreference(document, '  spring  2027 ')).toBe(true);
-    expect(clicked).toHaveBeenCalledOnce();
+    expect(requested).toHaveBeenCalledOnce();
+    expect(clicked).not.toHaveBeenCalled();
+    expect(applyTermPreference(document, 'Spring 2027')).toBe(false);
+  });
+
+  it('retries if the MAIN bridge was not ready to handle the request', () => {
+    bridge.abort();
+    document.body.innerHTML = fixture;
+    const spring = document.getElementById('IS_SSS_ShCtTm1274UGRDLnk')!;
+    expect(applyTermPreference(document, 'Spring 2027')).toBe(false);
+    spring.addEventListener(albertSelectTermEvent, (event) => { event.preventDefault(); });
+    expect(applyTermPreference(document, 'Spring 2027')).toBe(true);
     expect(applyTermPreference(document, 'Spring 2027')).toBe(false);
   });
 
@@ -22,7 +43,7 @@ describe('default semester tab', () => {
     const group = document.querySelector('div')!;
     group.replaceChildren(...[...group.childNodes].map((node) => node.cloneNode(true)));
     const clicked = vi.fn();
-    group.addEventListener('click', clicked);
+    group.addEventListener(albertSelectTermEvent, clicked);
     document.body.append(document.createElement('aside'));
     expect(applyTermPreference(document, 'Spring 2027')).toBe(false);
     expect(clicked).not.toHaveBeenCalled();
@@ -56,7 +77,7 @@ describe('default semester tab', () => {
     expect(applyTermPreference(document, 'Spring 2027')).toBe(false);
   });
 
-  it('does not click hidden, disabled, or ambiguous semester controls', () => {
+  it('does not request hidden, disabled, or ambiguous semester controls', () => {
     const spring = document.getElementById('IS_SSS_ShCtTm1274UGRDLnk')!;
     spring.setAttribute('aria-disabled', 'true');
     expect(applyTermPreference(document, 'Spring 2027')).toBe(false);

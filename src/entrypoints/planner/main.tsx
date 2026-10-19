@@ -5,8 +5,8 @@ import { transition, undo } from '../../core/registration';
 import type { RegistrationEvent } from '../../core/registration';
 import { analyzeCourseConflict, rankSchedules, solveSchedules } from '../../core/schedule';
 import type { RankedSchedule, SchedulePreferences } from '../../core/schedule';
-import { calendarBounds, calendarLocationLabel, calendarPlacement } from '../../features/planner/calendarLayout';
-import { calendarCourseColors, plannerComponentLabel } from '../../features/planner/calendarAppearance';
+import { calendarBounds, calendarPlacement } from '../../features/planner/calendarLayout';
+import { calendarCourseColors, calendarCourseTitle, plannerComponentLabel } from '../../features/planner/calendarAppearance';
 import { normalizePlannerData, plannerItem, removeCourseFromPlanner } from '../../storage/planner';
 import type { PlannerData } from '../../storage/planner';
 import './style.css';
@@ -79,6 +79,7 @@ function App(): React.JSX.Element {
   const problem = useMemo(() => ({ intents: data.intents, options: data.options, registration: data.registration.present }), [data]);
   const schedules = useMemo(() => rankSchedules(solveSchedules(problem), data.preferences, problem), [problem, data.preferences]);
   const current = schedules[Math.min(selectedPlan, Math.max(0, schedules.length - 1))];
+  const courseTitles = useMemo(() => new Map(data.courses.map((course) => [course.id, calendarCourseTitle(course)])), [data.courses]);
   const courseColors = useMemo(() => calendarCourseColors([
     ...data.courses.map((course) => course.id),
     ...data.options.map((option) => option.courseId),
@@ -126,7 +127,7 @@ function App(): React.JSX.Element {
     {data.courses.length === 0 ? <section className="empty"><h2>No courses yet</h2><p>Open a supported course page in Albert and choose “Add to Schedule Lab.”</p></section> : <>
       <div className="workspace">
         <aside className="courses panel">
-          <div className="panel-heading"><div><small>COURSES</small><h2>Your courses</h2></div></div>
+          <div className="panel-heading"><h2 className="panel-label">COURSES</h2></div>
           {data.courses.map((course) => {
             const intent = data.intents.find((item) => item.courseId === course.id)!;
             const courseOptions = data.options.filter((option) => option.courseId === course.id);
@@ -179,7 +180,7 @@ function App(): React.JSX.Element {
         </aside>
 
         <section className="calendar panel">
-          <div className="panel-heading"><div><small>CURRENT CANDIDATE</small><h2>{current === undefined ? 'No feasible schedule' : `Plan ${String.fromCharCode(65 + Math.min(selectedPlan, 25))}`}</h2></div></div>
+          <div className="panel-heading"><div><small className="panel-label">CURRENT CANDIDATE</small><h2>{current === undefined ? 'No feasible schedule' : `Plan ${String.fromCharCode(65 + Math.min(selectedPlan, 25))}`}</h2></div></div>
           {current === undefined ? <div className="zero"><b>0 results</b><p>Undo the last registration change, unlock a section, or make a course optional.</p></div> : <div className="calendar-grid" style={{ '--calendar-hours': calendarSpan / 60 } as React.CSSProperties}>
             <div className="time-axis"><b aria-hidden="true">Time</b><div className="day-track">{hourMarks.map((minute) => <span className="time-label" key={minute} style={{ top: `${(minute - bounds.startMinute) / calendarSpan * 100}%` }}>{time(minute)}</span>)}</div></div>
             {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const).map((day) => <div className="day" key={day}><b>{shortDays[day]}</b><div className="day-track">{current.options.flatMap((option) => optionMeetingEntries(option).filter(({ meeting }) => meeting.day === day).map(({ meeting, component }, meetingIndex) => {
@@ -195,19 +196,17 @@ function App(): React.JSX.Element {
                   borderLeftColor: color?.border, backgroundColor: color?.background,
                 }}
               >
-                <strong>{data.courses.find((course) => course.id === option.courseId)?.code}</strong>
+                <strong>{courseTitles.get(option.courseId) ?? option.courseId}</strong>
                 {component !== undefined && option.sectionIds.length > 1 && <small>{plannerComponentLabel(component)}</small>}
-                <span>{time(meeting.startMinute)}–{time(meeting.endMinute)}</span>
-                {meeting.location !== undefined && <small>{calendarLocationLabel(meeting.location)}</small>}
               </div>;
             }))}</div></div>)}
           </div>}
-          {current !== undefined && <div className="candidate-components">{current.options.map((option) => <article key={option.id}><b>{data.courses.find((course) => course.id === option.courseId)?.title ?? option.courseId}</b>{option.components !== undefined && option.components.length > 1 ? option.components.map((component) => <div key={component.sectionId}><strong>{plannerComponentLabel(component)}</strong><span>{componentTime({ ...component, meetings: component.meetings ?? [] })}</span></div>) : <span>{optionTime(option)}</span>}</article>)}</div>}
+          {current !== undefined && <div className="candidate-components">{current.options.map((option) => <article key={option.id}><b>{courseTitles.get(option.courseId) ?? option.courseId}</b>{option.components !== undefined && option.components.length > 1 ? option.components.map((component) => <div key={component.sectionId}><strong>{plannerComponentLabel(component)}</strong><span>{componentTime({ ...component, meetings: component.meetings ?? [] })}</span></div>) : <span>{optionTime(option)}</span>}</article>)}</div>}
           {current !== undefined && <Score schedule={current} />}
         </section>
 
         <aside className="ranking panel">
-          <div className="panel-heading"><div><small>RANKING</small><h2>Best plans</h2></div></div>
+          <div className="panel-heading"><h2 className="panel-label">RANKING</h2></div>
           {schedules.slice(0, 8).map((schedule, index) => <button className={`plan ${current?.id === schedule.id ? 'selected' : ''}`} key={schedule.id || 'empty'} onClick={() => setSelectedPlan(index)}><span>Plan {String.fromCharCode(65 + index)}</span><b>{schedule.score.totalScore}</b><small>robustness {schedule.score.robustnessScore}</small></button>)}
           <div className="preference"><h3>Preferences</h3>
             <label><input type="checkbox" checked={data.preferences.avoidBeforeMinute !== undefined} onChange={(event) => persist({ ...data, preferences: event.target.checked ? { ...data.preferences, avoidBeforeMinute: 600 } : withoutEarlyPreference(data.preferences) })} /> Avoid classes before 10:00</label>

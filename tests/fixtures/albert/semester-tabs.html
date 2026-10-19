@@ -1,13 +1,15 @@
-<!-- Reduced Albert shopping-cart semester controls; no student or course data. -->
+<!-- Reduced Albert shopping-cart controls. Page API and onclick sequence verified 2026-10-19; no student/course data. -->
 <div class="isSSS_FullW isSSS_ShopCart isSSS_CartByCareer isSSS_ShCtCarUGRD selected">
-  <a href="javascript:void(0);" id="IS_SSS_ShCtTm1268UGRDLnk" data-termclass="isSSS_ShCtTm1268UGRD" class="selected" onclick="selectSemester(this)">Fall 2026</a>
-  <a href="javascript:void(0);" id="IS_SSS_ShCtTm1272UGRDLnk" data-termclass="isSSS_ShCtTm1272UGRD" onclick="selectSemester(this)">January 2027</a>
-  <a href="javascript:void(0);" id="IS_SSS_ShCtTm1274UGRDLnk" data-termclass="isSSS_ShCtTm1274UGRD" onclick="selectSemester(this)">Spring 2027</a>
+  <a href="javascript:void(0);" id="IS_SSS_ShCtTm1268UGRDLnk" data-termclass="isSSS_ShCtTm1268UGRD" class="selected" onclick="IS.SSS.ShopCartTermSelect(this); makeTablesResponsivePostLoad(this.parentNode); DisplayToggleButton('1268UGRD');">Fall 2026</a>
+  <a href="javascript:void(0);" id="IS_SSS_ShCtTm1272UGRDLnk" data-termclass="isSSS_ShCtTm1272UGRD" onclick="IS.SSS.ShopCartTermSelect(this); makeTablesResponsivePostLoad(this.parentNode); DisplayToggleButton('1272UGRD');">January 2027</a>
+  <a href="javascript:void(0);" id="IS_SSS_ShCtTm1274UGRDLnk" data-termclass="isSSS_ShCtTm1274UGRD" onclick="IS.SSS.ShopCartTermSelect(this); makeTablesResponsivePostLoad(this.parentNode); DisplayToggleButton('1274UGRD');">Spring 2027</a>
 </div>
 <output id="selected-semester">Fall 2026</output>
 <script>
-  function selectSemester(tab) {
+  window.IS = { SSS: { ShopCartTermSelect(tab) {
     for (const sibling of tab.parentElement.querySelectorAll('a[data-termclass]')) sibling.classList.toggle('selected', sibling === tab);
     document.getElementById('selected-semester').textContent = tab.textContent;
-  }
+  } } };
+  function makeTablesResponsivePostLoad(group) { group.dataset.responsive = 'true'; }
+  function DisplayToggleButton(term) { document.getElementById('selected-semester').dataset.displayedTerm = term; }
 </script>

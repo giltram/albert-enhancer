@@ -1,4 +1,5 @@
 import { ALBERT_SELECTORS } from './selectors';
+import { albertSelectTermEvent } from './searchBridge';
 
 const appliedPreferences = new WeakMap<Element, string>();
 
@@ -23,9 +24,14 @@ export function applyTermPreference(root: ParentNode, preferredTerm?: string): b
   const group = tab.parentElement;
   if (group === null || appliedPreferences.get(group) === preferred) return false;
   if (tab.closest('[hidden], [inert], [aria-hidden="true"]') !== null || tab.getAttribute('aria-disabled') === 'true') return false;
-  // Remember before clicking: Albert updates the DOM and triggers our observer again.
+  // Remember before dispatch: Albert updates the DOM and can trigger enhancement again.
   appliedPreferences.set(group, preferred);
   if (tab.classList.contains('selected')) return false;
-  tab.click();
-  return true;
+  // MAIN acknowledges a successful call by cancelling this fixed request event.
+  // Never click Albert's javascript: link from the isolated extension world.
+  const request = new Event(albertSelectTermEvent, { bubbles: true, cancelable: true });
+  tab.dispatchEvent(request);
+  if (request.defaultPrevented) return true;
+  appliedPreferences.delete(group);
+  return false;
 }

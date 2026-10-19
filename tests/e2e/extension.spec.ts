@@ -11,6 +11,48 @@ test('planner renders its zero-result state', async ({ planner }) => {
   await expect(planner.getByRole('heading', { name: 'No courses yet' })).toBeVisible();
 });
 
+test('calendar cleans saved course titles and hides locations without changing saved data', async ({ extensionContext, extensionId }, testInfo) => {
+  const courses = [
+    { id: 'CSCI-SHU 360', code: 'CSCI-SHU 360', title: 'Machine Learning' },
+    { id: 'ECON-SHU 202', code: 'ECON-SHU 202', title: 'ECON-SHU 202 Intermediate Macroeconomics' },
+    { id: 'ECON-SHU 301', code: 'ECON-SHU 301', title: 'ECON-SHU 301 Econometrics' },
+  ];
+  const [worker] = extensionContext.serviceWorkers();
+  await worker!.evaluate(async (courses) => {
+    await chrome.storage.local.set({ planner: {
+      schemaVersion: 2,
+      courses,
+      intents: courses.map((course) => ({ courseId: course.id, required: true })),
+      options: courses.map((course, index) => ({
+        id: `${course.id}:001`, courseId: course.id, sectionIds: [`${course.id}:001`],
+        instructors: [],
+        meetings: ['tuesday', 'thursday'].map((day) => ({
+          day, startMinute: 585 + index * 180, endMinute: 660 + index * 180,
+          location: '567 West Yangsi Rd, Shanghai Room E204',
+        })),
+      })),
+      registration: { present: { optionStatuses: {}, excludedOptionIds: [] }, past: [] },
+    } });
+  }, courses);
+  const planner = await extensionContext.newPage();
+  await planner.setViewportSize({ width: 1440, height: 1100 });
+  await planner.goto(`chrome-extension://${extensionId}/planner.html`);
+  await expect(planner.locator('.meeting')).toHaveCount(6);
+  const names = ['Machine Learning', 'Intermediate Macroeconomics', 'Econometrics'];
+  for (const [index, course] of courses.entries()) {
+    await expect(planner.locator(`.meeting[data-course-id="${course.id}"] strong`)).toHaveText([names[index]!, names[index]!]);
+  }
+  await expect(planner.locator('.calendar')).not.toContainText('E204');
+  await expect(planner.locator('.calendar')).not.toContainText('567 West Yangsi Rd');
+  await expect(planner.locator('.courses .course-title b')).toHaveText(courses.map((course) => course.code));
+  await expect(planner.locator('.courses .course-title span')).toHaveText(courses.map((course) => course.title));
+  const stored = await worker!.evaluate(async () => (await chrome.storage.local.get('planner')).planner);
+  expect(stored).toMatchObject({ courses, options: courses.map(() => ({ meetings: [{ location: '567 West Yangsi Rd, Shanghai Room E204' }, { location: '567 West Yangsi Rd, Shanghai Room E204' }] })) });
+  await planner.screenshot({ path: testInfo.outputPath('calendar-course-titles.png'), fullPage: true });
+  await planner.close();
+  await worker!.evaluate(async () => { await chrome.storage.local.remove('planner'); });
+});
+
 test('fixture course can be added, simulated, undone, and removed', async ({ extensionContext, extensionId }) => {
   const albert = await extensionContext.newPage();
   await albert.route('https://test.nyu.edu/course', (route) => route.fulfill({
@@ -31,12 +73,14 @@ test('fixture course can be added, simulated, undone, and removed', async ({ ext
 
   const planner = await extensionContext.newPage();
   await planner.goto(`chrome-extension://${extensionId}/planner.html`);
-  await expect(planner.getByRole('heading', { name: 'Your courses' })).toBeVisible();
+  await expect(planner.getByRole('heading', { name: 'COURSES', exact: true })).toBeVisible();
   await expect(planner.locator('.course-title b').filter({ hasText: 'CSCI-SHU 220' })).toBeVisible();
   await expect(planner.getByLabel('Remove CSCI-SHU 220')).toHaveText('Remove');
   const calendarMeeting = planner.locator('.meeting[data-start-minute="840"]').first();
   await expect(calendarMeeting).toBeVisible();
-  await expect(calendarMeeting.locator('small')).toHaveText('EB224');
+  await expect(calendarMeeting.locator('strong')).toHaveText('Algorithms');
+  await expect(calendarMeeting.locator('small')).toHaveCount(0);
+  await expect(calendarMeeting).not.toContainText('EB224');
   await expect(calendarMeeting).not.toContainText('567 West Yangsi Rd');
   expect(Number.parseFloat(await calendarMeeting.evaluate((element) => (element as HTMLElement).style.top))).toBeGreaterThan(40);
 
@@ -77,6 +121,7 @@ test('adding Wang machine learning from the second result preserves its course i
   await expect(planner.locator('.simulation-options')).toContainText('reci 004');
   await expect(planner.locator('.meeting.component-lecture').first()).toContainText('lec 003');
   await expect(planner.locator('.meeting.component-recitation').first()).toContainText('reci 004');
+  expect(new Set(await planner.locator('.meeting strong').allTextContents())).toEqual(new Set(['Machine Learning']));
   const machineLearningColors = await planner.locator('.meeting').evaluateAll((meetings) => meetings.map((meeting) => getComputedStyle(meeting).backgroundColor));
   expect(new Set(machineLearningColors).size).toBe(1);
   await expect(planner.getByText('AI for Business', { exact: false })).toHaveCount(0);
@@ -174,6 +219,10 @@ test('default semester persists, applies on opening, and preserves manual tab ch
   const albert = await extensionContext.newPage();
   const [worker] = extensionContext.serviceWorkers();
   const previousSettings = await worker!.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+  const cspErrors: string[] = [];
+  albert.on('console', (message) => {
+    if (/Content Security Policy|Running the JavaScript URL/i.test(message.text())) cspErrors.push(message.text());
+  });
   try {
     await settings.goto(`chrome-extension://${extensionId}/options.html`);
     await settings.getByLabel('Default semester', { exact: true }).fill('spring 2027');
@@ -186,10 +235,14 @@ test('default semester persists, applies on opening, and preserves manual tab ch
     await albert.route('https://test.nyu.edu/semester-tabs', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
     await albert.goto('https://test.nyu.edu/semester-tabs');
     await expect(albert.locator('#selected-semester')).toHaveText('Spring 2027');
+    await expect(albert.locator('#selected-semester')).toHaveAttribute('data-displayed-term', '1274UGRD');
+    await expect(albert.locator('.isSSS_ShopCart')).toHaveAttribute('data-responsive', 'true');
     await albert.getByRole('link', { name: 'Fall 2026', exact: true }).click();
     await expect(albert.locator('#selected-semester')).toHaveText('Fall 2026');
+    expect(cspErrors).toEqual([]);
     await albert.reload();
     await expect(albert.locator('#selected-semester')).toHaveText('Spring 2027');
+    expect(cspErrors).toEqual([]);
 
     await settings.getByLabel('Default semester', { exact: true }).fill('Spring 2028');
     await settings.getByRole('button', { name: 'Save settings' }).click();

@@ -14,11 +14,12 @@
 | `enhancePage.ts` | `enhanceAlbertPage(root, settings, planner?)`，应用偏好、缩写、高亮、工具栏、添加课程动作及当前计划冲突提示 |
 | `campusAdapter.ts` | 收集实际校区值；`applyCampusPreference` 应用精确匹配的已保存值 |
 | `termAdapter.ts` | `applyTermPreference` 根据学期标签匹配；每个已渲染分组/偏好只自动应用一次 |
+| `homeToolbar.ts` | `ensureHomeToolbar(root, actions)` 在原生学期容器顶部显示 Schedule Lab / Degree Planner / Settings，继承宿主容器边界，不显示品牌文字；通过回调导航 |
 | `sessionKeeper.ts` | 定位到期确认控件、验证续期 URL、发送固定续期事件 |
-| `searchBridge.ts` | 两个内容脚本共享的事件名，无扩展 API 依赖 |
+| `searchBridge.ts` | 两个内容脚本共享的搜索、学期、续期事件名，无扩展 API 依赖 |
 | `fixtureCapture.ts` | `captureSanitizedFixture`，裁剪并脱敏解析相关 DOM，供开发模式下载 |
 | `statusDetector.ts` | `detectRegistrationStatus`，文本结果为 enrolled/full/waitlisted/unknown；当前仅被测试调用 |
-| `enhancements.css` | 注入页面的增强样式；由 content entrypoint 加载 |
+| `enhancements.css` | 注入页面的增强样式；由 content entrypoint 加载，首页导航按钮外观复用 `styles/navigationButtons.css`，与 Popup 一致 |
 
 常规能力从 `index.ts` 导出；桥接常量从 `searchBridge.ts` 直接导入。`parseCourse` 的输入必须是当前课程/section 对应的元素，不能从其他搜索结果借用课程身份。
 
@@ -26,12 +27,13 @@
 
 ## 宿主生命周期与事件
 
-`entrypoints/content.ts` 读取设置与计划，调用增强并安装 MutationObserver；设置或计划变化时，移除已注入面板后刷新。`data-ae-enhancement` 等 DOM 标记避免重复插入。`enhancePage.ts` 的 `latestSettings` 当前是事件处理使用的隐式模块状态，后续调整编排时应改为显式上下文。
+`entrypoints/content.ts` 读取设置与计划，调用增强并安装 MutationObserver；设置或计划变化时，移除已注入面板后刷新。每次增强前检查 WXT context；失效时清理 observer、存储订阅及注入界面。`data-ae-enhancement` 等 DOM 标记避免重复插入。`enhancePage.ts` 的 `latestSettings` 当前是事件处理使用的隐式模块状态，后续调整编排时应改为显式上下文。
 
 | 事件常量 / 字符串 | 发送方 → 接收方 | 行为 |
 | --- | --- | --- |
 | `albertTitleSearchEvent` / `albert-enhancer:submit-title-search` | adapter → MAIN 脚本 | 使用固定 action `BUTTON_SMALL` 提交搜索 |
 | `albertDescriptionSearchEvent` / `albert-enhancer:submit-description-search` | adapter → MAIN 脚本 | 使用固定 action `SMALL_BUTTON` 提交搜索 |
+| `albertSelectTermEvent` / `albert-enhancer:select-term` | termAdapter → MAIN 脚本 | 从目标学期链接冒泡、可取消；MAIN 校验选择器、可交互状态及一致的 ID / data-termclass，依次调用 `IS.SSS.ShopCartTermSelect(tab)`、`makeTablesResponsivePostLoad(group)`、`DisplayToggleButton(term)` 后以 `preventDefault()` 确认处理；三个函数未就绪时不调用、不确认，允许重试 |
 | `albertSessionConfirmEvent` / `albert-enhancer:confirm-session` | sessionKeeper → MAIN 脚本 | 重新检查到期控件和 URL，尝试重置 opener 计时，导航续期并关闭提示窗 |
 | `albertMainBridgeReadyEvent` / `albert-enhancer:main-bridge-ready` | MAIN 脚本 → content | 桥接就绪后重试增强和续期检查 |
 
@@ -39,7 +41,10 @@
 
 ## 不变量与现存限制
 
+- 首页三个扩展按钮必须覆盖 Albert 的原生 `!important` 按钮规则；共享导航样式仅对扩展专用 class / marker 提升优先级，不改原生按钮。样式冲突回归见 `tests/features/navigationButtons.test.ts`。
 - 校区必须使用页面收集到的精确 option value；不存在时保留当前值。默认学期只在唯一匹配且可交互时切换，保留后续手动选择。
+- 学期选择只通过 MAIN 桥接调用页面函数；禁止从隔离世界点击 `javascript:` 链接，也不解析或执行任意 `onclick` / `href` 代码。页面函数未加载时不标记偏好已应用，bridge-ready 后可重试。
+- 原生学期入口及三个函数的调用顺序于 2026-10-19 在真实 Albert 页核对；`tests/fixtures/albert/semester-tabs.html` 保留同名 API，不能再用虚构的 `selectSemester` 代替宿主契约。内置浏览器回放见 `tests/browser/README.md`。
 - `keepSessionAlive` 默认关闭；URL 只接受 NYU HTTPS 主机和 `cmd=resettimeout`，不执行页面提供的 `javascript:` 字符串。
 - 组件按 `Component:` 分类。在 `SELECT_CLASS` 学期列表内，一个主课后直到下一个非 REC/LAB 组件之前的辅课属于该主课。不能跨课程/学期，也不能根据“不是第一行”、老师、教室、按钮缺失来分类。
 - 这一有序块约定已在 Spring 2027 上海校区的 CSCI-SHU 360、CSCI-SHU 11 页面核对；后者原生 Related Sections 页面也列出相同六个必选 lab。它不是全校通用的关联 API。不同布局或显式 recitation → lab 特定关联需新增 adapter 数据来源，不能默认笛卡尔组合。
@@ -51,4 +56,4 @@
 - 状态检测器尚未连接 DOM 增强或模拟状态；不能把解析出的文字当作已确认的注册结果。
 - 解析器产生普通数据；DOM 定位问题应在本模块修正，不应让 core 理解 Albert 页面结构。
 
-测试位于 `tests/adapters/`，脱敏页面样本位于 `tests/fixtures/albert/`；完整注入、搜索桥接、续期、添加课程流程在 `tests/e2e/extension.spec.ts`。解析缺陷应先增加最小脱敏 fixture，再增加回归断言。真实页面检查参见 [Manual checkpoint](../../../docs/MANUAL_CHECKPOINT_1.md)。
+测试位于 `tests/adapters/`，脱敏页面样本位于 `tests/fixtures/albert/`；`tests/entrypoints/` 验证隔离脚本失效清理和 MAIN 学期桥接。完整注入、搜索桥接、续期、添加课程流程在 `tests/e2e/extension.spec.ts`。解析缺陷应先增加最小脱敏 fixture，再增加回归断言。真实页面检查参见 [Manual checkpoint](../../../docs/MANUAL_CHECKPOINT_1.md)。

@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { calendarCourseColors, plannerComponentLabel } from '../../src/features/planner/calendarAppearance';
+import { calendarCourseColors, calendarCourseTitle, plannerComponentLabel } from '../../src/features/planner/calendarAppearance';
 
 describe('Schedule Lab calendar appearance', () => {
+  it.each([
+    ['ECON-SHU 202', 'ECON-SHU 202 Intermediate Macroeconomics', 'Intermediate Macroeconomics'],
+    ['ECON-SHU 301', 'ECON-SHU 301 Econometrics', 'Econometrics'],
+    ['CSCI-SHU 360', 'CSCI-SHU 360 Machine Learning', 'Machine Learning'],
+    ['CSCI-SHU 360', 'Machine Learning', 'Machine Learning'],
+    ['ECON-SHU 202', '  ECON-SHU\u00a0202  Intermediate Macroeconomics ', 'Intermediate Macroeconomics'],
+    ['ECON-SHU 202', 'econ-shu 202: Intermediate Macroeconomics', 'Intermediate Macroeconomics'],
+    ['ECON-SHU 202', 'ECON-SHU 202 : Intermediate Macroeconomics', 'Intermediate Macroeconomics'],
+    ['CSCI-UA 1', 'CSCI-UA 101 Topics', 'CSCI-UA 101 Topics'],
+    ['CSCI-UA 1', 'Introduction to CSCI-UA 1', 'Introduction to CSCI-UA 1'],
+  ])('formats the calendar title for %s / %s', (code, title, expected) => {
+    expect(calendarCourseTitle({ code, title })).toBe(expected);
+  });
+
   it('assigns one color per course regardless of how many options or components it has', () => {
     const colors = calendarCourseColors(['cs101', 'econ101', 'cs101', 'econ101']);
     expect(colors.size).toBe(2);

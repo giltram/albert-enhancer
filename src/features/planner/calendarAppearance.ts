@@ -1,4 +1,14 @@
-import type { EnrollmentComponent } from '../../core/courses';
+import type { Course, EnrollmentComponent } from '../../core/courses';
+
+/** Older imports can store the course code inside the title as well as in code. */
+export function calendarCourseTitle(course: Pick<Course, 'code' | 'title'>): string {
+  const title = course.title.replace(/\s+/g, ' ').trim();
+  const code = course.code.replace(/\s+/g, ' ').trim();
+  if (code.length === 0) return title;
+  const escapedCode = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const name = new RegExp(`^${escapedCode}(?:\\s*[:–—]\\s*|\\s+)(.+)$`, 'i').exec(title)?.[1]?.trim();
+  return name || title;
+}
 
 export interface CalendarCourseColor {
   readonly border: string;

@@ -1,0 +1,22 @@
+/* Reduced native rules inspected on the real Albert homepage, 2026-10-19.
+ * Source: https://sis.portal.nyu.edu/cs/ihprod/cache/862/NYU_MAIN_2.css
+ * Keep these priorities: they caused extension buttons to look like Albert controls.
+ */
+.isSSS_FullW button {
+  background: #fff !important;
+  color: #000 !important;
+  border: 2px solid #008769 !important;
+  padding: 10px;
+  font-weight: bold !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+}
+
+.isSSS_FullW button:hover {
+  background: #008765 !important;
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+button:focus { outline: 3px solid #3dbbdb !important; }

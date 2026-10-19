@@ -28,9 +28,3 @@ export function calendarPlacement(meeting: Meeting, bounds: CalendarBounds): Cal
     heightPercent: Math.max(0, (meeting.endMinute - meeting.startMinute) / span * 100),
   };
 }
-
-/** Shanghai has one teaching address, so its calendar cards only need the room. */
-export function calendarLocationLabel(location: string): string {
-  const shanghaiRoom = /^567 West Yangsi Rd,\s*Shanghai Room\s+(.+)$/i.exec(location.trim());
-  return shanghaiRoom?.[1]?.trim() || location;
-}

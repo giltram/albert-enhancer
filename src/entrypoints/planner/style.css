@@ -6,6 +6,7 @@ h1, h2, h3 { margin: 0; }.header-stat { display: grid; text-align: right; }.head
 .workspace { display: grid; grid-template-columns: 270px minmax(520px, 1fr) 260px; gap: 14px; padding: 14px; }
 .panel { border: 1px solid #ded6e2; border-radius: 13px; background: white; box-shadow: 0 4px 16px rgb(50 25 64 / 5%); }
 .courses, .ranking, .calendar { min-height: 500px; padding: 18px; }.panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }.panel-heading small { color: #716378; }.panel-heading h2 { font-size: 18px; }
+.panel-heading .panel-label { color: #716378; font-size: 14px; font-weight: 800; letter-spacing: .14em; }
 .course { padding: 13px 0; border-top: 1px solid #eee8f1; }.course-title { display: flex; justify-content: space-between; gap: 8px; }.course-title div { display: grid; }.course-title span { color: #746a79; font-size: 12px; }
 .course label, .preference label { display: flex; gap: 7px; margin: 10px 0; font-size: 12px; }details { margin: 7px 0; padding: 7px; border-radius: 7px; background: #f7f4f9; font-size: 11px; }summary { cursor: pointer; }summary em { float: right; color: #7b547e; }
 .remove-course { align-self: start; flex: none; border: 1px solid #d7aab2; padding: 4px 7px; background: white; color: #8b2638; font-size: 10px; font-weight: 700; }

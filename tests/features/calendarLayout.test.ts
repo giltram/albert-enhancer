@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarBounds, calendarLocationLabel, calendarPlacement } from '../../src/features/planner/calendarLayout';
+import { calendarBounds, calendarPlacement } from '../../src/features/planner/calendarLayout';
 
 describe('Schedule Lab calendar layout', () => {
   it('positions meetings by clock time instead of list order', () => {
@@ -17,10 +17,5 @@ describe('Schedule Lab calendar layout', () => {
   it('expands the axis for unusually early or late classes', () => {
     const bounds = calendarBounds([{ day: 'friday', startMinute: 450, endMinute: 1325 }]);
     expect(bounds).toEqual({ startMinute: 420, endMinute: 1380 });
-  });
-
-  it('shows only the room for the single Shanghai teaching address', () => {
-    expect(calendarLocationLabel('567 West Yangsi Rd, Shanghai Room EB224')).toBe('EB224');
-    expect(calendarLocationLabel('6 MetroTech Center, Brooklyn Room 101')).toBe('6 MetroTech Center, Brooklyn Room 101');
   });
 });

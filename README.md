@@ -1,6 +1,26 @@
 # Albert Enhancer
 
-Albert Enhancer is a Chrome extension for understanding NYU courses, exploring feasible schedules, preparing backups, and supporting registration decisions. It never enrolls, drops, swaps, waitlists, or submits registration actions.
+A Chrome extension that makes NYU Albert a little easier to use: fewer clicks, clearer course information, and a few tools to help with planning.
+
+## What it does so far
+
+### Little things that save clicks
+
+- **Auto-select your semester tab**: Enter an Albert semester label, such as `Spring 2027`, in Settings → Default semester tab. The extension selects it when you open the shopping cart, and you can still switch tabs afterward. Leave it blank to turn this off; unavailable semesters leave the current tab alone.
+- **Auto-select your School**: Set a default School for Course Search. Open the logged-in Course Search once so the extension can pick up the actual School options, then choose one in Settings.
+- **Course abbreviation recognition**: Search with shortcuts like `ICS`, `DL`, `WAI`, or `POH`, and they expand into full course names, regardless of capitalization. Abbreviations in course information also get their full names added. You can add, edit, or disable your own shortcuts.
+- **Press Enter to search**: Hit Enter in the course title / instructor keyword field or the course description field to search. Abbreviations are expanded along the way.
+- **Copy Class Number**: Copy it right next to the course information, without hunting for the number again.
+- **Session timeout helper**: Optionally click OK automatically when Albert warns that your session is about to expire. Off by default.
+
+### Course details, schedules, and degree planning
+
+- **Course highlights**: Pull out meeting times, locations, instructors, prerequisites, extra fees, and special rules. Also show recognized major / Core categories and time conflicts with the current schedule plan. Each kind of highlight can be toggled separately.
+- **Schedule Lab**: Click `Add to Schedule Lab` in Albert to collect courses, browse candidate schedules and a weekly calendar, mark courses as required, lock or exclude sections, and rank plans with preferences like avoiding classes before 10 AM or on Fridays. You can also simulate getting a section, finding it full, or being waitlisted, explore alternatives, and undo changes.
+- **Degree Planner**: Includes NYU Shanghai CS, Economics, and the joint CS + Economics major. Add courses manually, drag them between Taken / In Progress / Planned, and check requirement coverage and missing CS prerequisites. Some rules still need an advisor's confirmation.
+- **Settings and local data**: Includes a master switch, custom abbreviations, and highlight controls. Data stays in your browser, with options to export it or clear it all.
+
+**Schedule Lab is still under development and very rough around the edges.** The features above are an early version, and linked lecture / recitation / lab combinations are not fully connected yet. Double-check imported courses and generated schedules, and treat it as an experiment for now. Simulated registration outcomes are local records only; the extension never enrolls, drops, swaps, or submits waitlist requests for you.
 
 ## Development
 
@@ -11,8 +31,6 @@ npm run dev
 ```
 
 The production unpacked extension is written to `.output/chrome-mv3/` by `npm run build`.
-
-In Settings → Default semester tab, enter a label such as `Spring 2027` to select that shopping-cart semester whenever Albert opens. Manual tab changes are preserved afterward. Leave the setting blank to disable it; unavailable semesters leave the current tab unchanged.
 
 ## Architecture
 

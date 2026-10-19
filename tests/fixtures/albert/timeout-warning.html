@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Timeout Warning. Click OK to not end the session.</title>
+</head>
+<body onload="window.setTimeout('this.close()', 118000);">
+  <div aria-describedby="alertmsg" role="alertdialog" class="pstimeoutmsgcontainer" id="msgcontainer">
+    <div class="psfluidmsgalert" id="alertmsg">
+      <div class="psfluidmsgshort" id="shortmsg">Your session is about to expire.</div>
+      <div class="psfluidmsglong" id="longmsg">As a security precaution, sessions end after 20 minutes of inactivity.<br><br>Click OK to continue your current session.</div>
+    </div>
+    <div class="psfluidmsgactions" id="buttoncontainer">
+      <span title="OK (Enter)" class="psfluidbuttonwrapper" id="buttonwrapper">
+        <a href="javascript:if (typeof window.opener.resetAutoSave == 'function') window.opener.resetAutoSave();self.location='https://sis.portal.nyu.edu/psp/ihprod/EMPLOYEE/EMPL/?cmd=resettimeout';this.close();" role="button" class="psfluidokbutton" id="msgokbutton">OK</a>
+      </span>
+    </div>
+  </div>
+</body>
+</html>

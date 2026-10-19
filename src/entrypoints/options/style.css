@@ -1,0 +1,21 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #241b2b; background: #f5f2f7; }
+body { margin: 0; }
+main { max-width: 880px; margin: 0 auto; padding: 40px 24px 80px; }
+header { margin-bottom: 24px; }
+header p { margin: 0; color: #57068c; font-size: 11px; letter-spacing: .16em; font-weight: 800; }
+h1 { margin: 5px 0; font-size: 36px; }
+section { margin: 14px 0; padding: 22px; border: 1px solid #ded5e3; border-radius: 14px; background: white; }
+h2 { margin: 0 0 16px; font-size: 18px; }
+label { display: grid; gap: 7px; margin: 10px 0; font-weight: 600; }
+label.switch, label.inline { display: flex; align-items: center; gap: 8px; }
+input[type="text"], input:not([type]), select { font: inherit; }
+input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; padding: 9px 11px; border: 1px solid #cfc4d6; border-radius: 7px; }
+select { box-sizing: border-box; width: 100%; padding: 9px 11px; border: 1px solid #cfc4d6; border-radius: 7px; background: white; }
+small { color: #6e6574; }
+.checks { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+.abbreviation-row { display: grid; grid-template-columns: 130px 18px 1fr auto auto; align-items: center; gap: 8px; }
+button { border: 0; border-radius: 8px; padding: 10px 15px; background: #57068c; color: white; font-weight: 700; cursor: pointer; }
+button.secondary, button.quiet { border: 1px solid #bba9c7; background: white; color: #57068c; }
+button.quiet { padding: 7px 10px; }
+button.danger { background: #9e1b32; }
+footer { display: flex; gap: 10px; margin-top: 20px; }

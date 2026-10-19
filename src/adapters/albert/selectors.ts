@@ -1,0 +1,21 @@
+/** Albert selectors live in one place so fixture regressions do not leak into features. */
+export const ALBERT_SELECTORS = {
+  semesterTab: 'a[id^="IS_SSS_ShCtTm"][data-termclass]',
+  campusSelect: '[data-ae-campus], [id="NYU_CLS_WRK2_DESCR254$33$"], #crit-camp, select[id*="campus" i], select[name*="campus" i]',
+  courseSearchQuery: '[data-ae-search-query], #NYU_CLS_DERIVED_DESCR100, #NYU_CLS_DERIVED_DESCR100_JOB_POST1',
+  courseSearchSubmit: '[data-ae-search-submit], #BUTTON_SMALL, #SMALL_BUTTON',
+  courseRoot: '[data-ae-course], .panel__content:has(.dtl-course-code):has(.detail-title), [id^="win0divNYU_CLS_DTL_CLASS_NBR$"]',
+  loggedCourseRoot: '[id^="win0divSELECT_COURSE_row$"]',
+  loggedCourseHeading: '[id^="win0divNYU_CLS_DERIVED_HTMLAREA$"] b',
+  courseCode: '[data-ae-field="course-code"], .dtl-course-code',
+  courseTitle: '[data-ae-field="course-title"], .detail-title',
+  sectionCode: '[data-ae-field="section-code"]',
+  component: '[data-ae-field="component"], .detail-component',
+  classNumber: '[data-ae-field="class-number"]',
+  meetings: '[data-ae-field="meeting"], .section--meeting_html .meet',
+  location: '[data-ae-field="location"], .detail-campus_location',
+  instructor: '[data-ae-field="instructor"], .detail-instructor, .section--instructor_html .section__content',
+  prerequisite: '[data-ae-field="prerequisite"], .detail-prerequisite, .section--prerequisites .section__content',
+  extraFee: '[data-ae-field="extra-fee"], .detail-fees, .section--fees .section__content',
+  specialRule: '[data-ae-field="special-rule"], .detail-notes, .section--notes .section__content',
+} as const;

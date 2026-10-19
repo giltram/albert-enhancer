@@ -17,10 +17,12 @@ A Chrome extension that makes NYU Albert a little easier to use: fewer clicks, c
 
 - **Course highlights**: Pull out meeting times, locations, instructors, prerequisites, extra fees, and special rules. Also show recognized major / Core categories and time conflicts with the current schedule plan. Each kind of highlight can be toggled separately.
 - **Schedule Lab**: Click `Add to Schedule Lab` in Albert to collect courses, browse candidate schedules and a weekly calendar, mark courses as required, lock or exclude sections, and rank plans with preferences like avoiding classes before 10 AM or on Fridays. You can also simulate getting a section, finding it full, or being waitlisted, explore alternatives, and undo changes.
-- **Degree Planner**: Includes NYU Shanghai CS, Economics, and the joint CS + Economics major. Add courses manually, drag them between Taken / In Progress / Planned, and check requirement coverage and missing CS prerequisites. Some rules still need an advisor's confirmation.
+- **Degree Planner (in development)**: An early planning board for manually adding courses and moving them between Taken / In Progress / Planned. The CS and Economics curriculum data has not been entered yet, so degree requirement coverage and prerequisite checks are not ready to rely on.
 - **Settings and local data**: Includes a master switch, custom abbreviations, and highlight controls. Data stays in your browser, with options to export it or clear it all.
 
 **Schedule Lab is still under development and very rough around the edges.** The features above are an early version, and linked lecture / recitation / lab combinations are not fully connected yet. Double-check imported courses and generated schedules, and treat it as an experiment for now. Simulated registration outcomes are local records only; the extension never enrolls, drops, swaps, or submits waitlist requests for you.
+
+**Degree Planner is also still under development.** The interface is a starting point; CS and Economics data still needs to be added before it can provide useful degree progress checks.
 
 ## Development
 
@@ -56,4 +58,4 @@ The [schedule architecture](docs/SCHEDULE_ARCHITECTURE.md) defines how raw linke
 
 ## Curriculum provenance
 
-The initial NYU Shanghai CS and Economics declarations target the 2026–27 NYU Bulletin. Ambiguous advising and double-count rules are marked for manual verification instead of being guessed. A student's matriculation-year bulletin remains authoritative.
+CS and Economics curriculum data is still pending. Any existing rule scaffolding is preliminary and should not be treated as a complete curriculum dataset. Your matriculation-year NYU Bulletin remains the reference for degree requirements, with ambiguous advising and double-count rules to be confirmed with an advisor.

@@ -1,34 +1,10 @@
-import { expect, test as base, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test } from './extensionTest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 declare const chrome: {
   storage: { local: { get(key: string): Promise<Record<string, unknown>>; set(value: unknown): Promise<void>; remove(key: string): Promise<void> } };
 };
-
-const extensionPath = path.resolve('.output/chrome-mv3');
-const test = base.extend<{ planner: Page }, { extensionContext: BrowserContext; extensionId: string }>({
-  extensionContext: [async ({}, use) => {
-    const context = await chromium.launchPersistentContext('', {
-      channel: 'chromium',
-      headless: true,
-      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-    });
-    await use(context);
-    await context.close();
-  }, { scope: 'worker' }],
-  extensionId: [async ({ extensionContext }, use) => {
-    let [worker] = extensionContext.serviceWorkers();
-    worker ??= await extensionContext.waitForEvent('serviceworker');
-    await use(new URL(worker.url()).host);
-  }, { scope: 'worker' }],
-  planner: async ({ extensionContext, extensionId }, use) => {
-    const page = await extensionContext.newPage();
-    await page.goto(`chrome-extension://${extensionId}/planner.html`);
-    await use(page);
-    await page.close();
-  },
-});
 
 test('planner renders its zero-result state', async ({ planner }) => {
   await expect(planner.getByRole('heading', { name: 'Schedule Lab' })).toBeVisible();
@@ -97,21 +73,34 @@ test('adding Wang machine learning from the second result preserves its course i
   await planner.goto(`chrome-extension://${extensionId}/planner.html`);
   await expect(planner.locator('.course-title b')).toHaveText('CSCI-SHU 360');
   await expect(planner.locator('.course-title span')).toHaveText('Machine Learning');
-  await expect(planner.locator('.simulation-options')).toContainText('CSCI-SHU 360:003');
+  await expect(planner.locator('.simulation-options')).toContainText('lec 003');
+  await expect(planner.locator('.simulation-options')).toContainText('reci 004');
+  await expect(planner.locator('.meeting.component-lecture').first()).toContainText('lec 003');
+  await expect(planner.locator('.meeting.component-recitation').first()).toContainText('reci 004');
+  const machineLearningColors = await planner.locator('.meeting').evaluateAll((meetings) => meetings.map((meeting) => getComputedStyle(meeting).backgroundColor));
+  expect(new Set(machineLearningColors).size).toBe(1);
   await expect(planner.getByText('AI for Business', { exact: false })).toHaveCount(0);
   const [worker] = extensionContext.serviceWorkers();
   const stored = await worker!.evaluate(async () => (await chrome.storage.local.get('planner')).planner);
   expect(stored).toMatchObject({
     courses: [{ id: 'CSCI-SHU 360', title: 'Machine Learning' }],
-    options: [{ id: 'CSCI-SHU 360:003', courseId: 'CSCI-SHU 360', instructors: [{ name: 'Wang, Shengjie' }], components: [{ classNumber: '18021' }] }],
+    options: [{ id: 'CSCI-SHU 360::CSCI-SHU 360:003+CSCI-SHU 360:004', courseId: 'CSCI-SHU 360', instructors: [{ name: 'Wang, Shengjie' }], components: [{ classNumber: '18021' }, { classNumber: '18022' }] }],
   });
 
   // A second course with the same section code must remain independently addable.
   await business.getByRole('button', { name: 'Add to Schedule Lab' }).click();
   await expect(business.getByRole('button', { name: 'Added' })).toBeDisabled();
+  // The other ML lecture does not overlap Business, so both courses can appear in the calendar.
+  const otherLecture = albert.locator('[id="win0divNYU_CLS_DTL_CLASS_NBR$1"]');
+  await otherLecture.getByRole('button', { name: 'Add to Schedule Lab' }).click();
+  await expect(otherLecture.getByRole('button', { name: 'Added' })).toBeDisabled();
   await planner.reload();
   await expect(planner.locator('.course-title')).toHaveCount(2);
   await expect(planner.locator('.course-title').filter({ hasText: 'CSCI-SHU 360' }).locator('span')).toHaveText('Machine Learning');
+  const colorsByCourse = await planner.locator('.meeting').evaluateAll((meetings) => Object.fromEntries(meetings.map((meeting) => [meeting.getAttribute('data-course-id'), getComputedStyle(meeting).backgroundColor])));
+  expect(colorsByCourse['CSCI-SHU 360']).toBe(machineLearningColors[0]);
+  expect(colorsByCourse['BUSF-SHU 276']).toBeDefined();
+  expect(colorsByCourse['BUSF-SHU 276']).not.toBe(colorsByCourse['CSCI-SHU 360']);
   await planner.getByLabel('Remove CSCI-SHU 360').click();
   await planner.getByLabel('Remove BUSF-SHU 276').click();
   await albert.close();
@@ -157,11 +146,11 @@ test('multi-component courses are grouped and section actions preserve compatibl
   await expect(planner.getByRole('heading', { name: 'Lecture' })).toBeVisible();
   await expect(planner.getByRole('heading', { name: 'Recitation' })).toBeVisible();
   await expect(planner.locator('.header-stat b')).toHaveText('2');
-  const recitation = planner.locator('.component-row').filter({ hasText: 'REC 012' });
+  const recitation = planner.locator('.component-row').filter({ hasText: 'reci 012' });
   await recitation.getByRole('button', { name: 'Exclude' }).click();
   await expect(planner.locator('.header-stat b')).toHaveText('1');
-  await expect(planner.locator('.candidate-components')).toContainText('REC 011');
-  const simulator = planner.locator('.simulation-options > div').filter({ hasText: 'REC 011' });
+  await expect(planner.locator('.candidate-components')).toContainText('reci 011');
+  const simulator = planner.locator('.simulation-options > div').filter({ hasText: 'reci 011' });
   await simulator.getByRole('button', { name: 'Full' }).click();
   await expect(planner.locator('.header-stat b')).toHaveText('0');
   await planner.close();
@@ -278,11 +267,11 @@ test('logged-in Albert Course Search iframe receives its actions and opens the r
   await expect(searchQuery).toHaveValue('Writing as Inquiry');
   await expect(search.getByText('BUTTON_SMALL', { exact: true })).toBeVisible();
   await expect(search.getByRole('button', { name: 'Add to Schedule Lab' })).toBeVisible();
-  await expect(search.getByRole('button', { name: 'Copy Class Number' })).toBeVisible();
+  await expect(search.getByRole('button', { name: 'Copy Class Number' })).toHaveCount(0);
   const resultSpacer = search.locator('[data-ae-results-end-spacer]');
   await expect(resultSpacer).toHaveCSS('height', '112px');
   await resultSpacer.evaluate((element) => element.scrollIntoView({ block: 'end' }));
-  const bottomClearance = await search.getByRole('button', { name: 'Copy Class Number' }).evaluate((button) => {
+  const bottomClearance = await search.getByRole('button', { name: 'Add to Schedule Lab' }).evaluate((button) => {
     const scroller = button.closest('.ps_apps_content')!;
     return scroller.getBoundingClientRect().bottom - button.getBoundingClientRect().bottom;
   });

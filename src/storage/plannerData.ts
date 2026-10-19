@@ -22,6 +22,45 @@ export const emptyPlannerData: PlannerData = {
   preferences: defaultSchedulePreferences,
 };
 
+/** Replace one primary's alternatives and its legacy standalone components. */
+export function mergeEnrollmentOptions(
+  value: PlannerData,
+  course: Course,
+  primarySectionId: string,
+  groupSectionIds: readonly string[],
+  options: readonly EnrollmentOption[],
+): PlannerData {
+  if (options.length === 0) return value;
+  const groupIds = new Set(groupSectionIds);
+  const removed = value.options.filter((option) => option.courseId === course.id
+    && (option.sectionIds.includes(primarySectionId)
+      || (option.sectionIds.length === 1 && groupIds.has(option.sectionIds[0]!))));
+  const removedIds = new Set(removed.map((option) => option.id));
+  const nextOptions = [...value.options.filter((option) => !removedIds.has(option.id)), ...options];
+  const keptOptionIds = new Set(nextOptions.map((option) => option.id));
+  const staleOptionIds = new Set([...removedIds].filter((id) => !keptOptionIds.has(id)));
+  const keptSectionIds = new Set(nextOptions.flatMap((option) => option.sectionIds));
+  const staleSectionIds = new Set(removed.flatMap((option) => option.sectionIds).filter((id) => !keptSectionIds.has(id)));
+  const cleanIds = (ids: readonly string[] | undefined): readonly string[] => (ids ?? []).filter((id) => !staleSectionIds.has(id));
+  return {
+    ...value,
+    courses: [...value.courses.filter((existing) => existing.id !== course.id), course],
+    options: nextOptions,
+    intents: value.intents.some((intent) => intent.courseId === course.id)
+      ? value.intents.map((intent) => intent.courseId !== course.id ? intent : {
+        ...intent,
+        requiredSectionIds: cleanIds(intent.requiredSectionIds),
+        excludedSectionIds: cleanIds(intent.excludedSectionIds),
+        preferredSectionIds: cleanIds(intent.preferredSectionIds),
+      })
+      : [...value.intents, { courseId: course.id, required: true }],
+    registration: {
+      present: withoutCourseRegistrationState(value.registration.present, staleOptionIds, staleSectionIds),
+      past: value.registration.past.map((state) => withoutCourseRegistrationState(state, staleOptionIds, staleSectionIds)),
+    },
+  };
+}
+
 function withoutCourseRegistrationState(
   state: RegistrationState,
   optionIds: ReadonlySet<string>,

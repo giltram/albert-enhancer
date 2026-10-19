@@ -9,9 +9,9 @@ describe('Albert adapter fixture replay', () => {
   it('keeps course identities and prerequisites within each search-result row', () => {
     document.body.innerHTML = readFileSync('tests/fixtures/albert/logged-in-machine-learning.html', 'utf8');
     const parsed = [...document.querySelectorAll(ALBERT_SELECTORS.courseRoot)].map(parseCourse);
-    expect(parsed.map((result) => result?.course.code)).toEqual(['BUSF-SHU 276', 'CSCI-SHU 360', 'CSCI-SHU 360']);
+    expect(parsed.map((result) => result?.course.code)).toEqual(['BUSF-SHU 276', 'CSCI-SHU 360', 'CSCI-SHU 360', 'CSCI-SHU 360', 'CSCI-SHU 360']);
     expect(parsed[0]?.information.prerequisite).toBe('Business foundations.');
-    expect(parsed[2]).toMatchObject({
+    expect(parsed[3]).toMatchObject({
       course: { id: 'CSCI-SHU 360', code: 'CSCI-SHU 360', title: 'Machine Learning' },
       section: { id: 'CSCI-SHU 360:003', courseId: 'CSCI-SHU 360', classNumber: '18021', instructors: [{ name: 'Wang, Shengjie' }] },
       information: { prerequisite: 'Linear Algebra.', degreeLabels: ['CS Elective'] },

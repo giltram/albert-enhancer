@@ -7,6 +7,7 @@ export const ALBERT_SELECTORS = {
   courseRoot: '[data-ae-course], .panel__content:has(.dtl-course-code):has(.detail-title), [id^="win0divNYU_CLS_DTL_CLASS_NBR$"]',
   loggedCourseRoot: '[id^="win0divSELECT_COURSE_row$"]',
   loggedCourseHeading: '[id^="win0divNYU_CLS_DERIVED_HTMLAREA$"] b',
+  loggedSectionList: '[id^="win0divSELECT_CLASS$"]',
   courseCode: '[data-ae-field="course-code"], .dtl-course-code',
   courseTitle: '[data-ae-field="course-title"], .detail-title',
   sectionCode: '[data-ae-field="section-code"]',

@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { emptyPlannerData, normalizePlannerData, removeCourseFromPlanner } from '../../src/storage/plannerData';
+import { emptyPlannerData, mergeEnrollmentOptions, normalizePlannerData, removeCourseFromPlanner } from '../../src/storage/plannerData';
 import type { PlannerData } from '../../src/storage/plannerData';
 
 describe('planner persistence migration', () => {
+  it('upgrades one lecture group without losing other lecture bundles or their outcomes', () => {
+    const course = { id: 'c', code: 'C 1', title: 'Course' };
+    const option = (id: string, sectionIds: readonly string[]) => ({ id, courseId: 'c', sectionIds, meetings: [], instructors: [] });
+    const old: PlannerData = {
+      ...emptyPlannerData,
+      courses: [course],
+      intents: [{ courseId: 'c', required: false, requiredSectionIds: ['rec-obsolete'], preferredSectionIds: ['lec2'] }],
+      options: [option('lec1', ['lec1']), option('rec-obsolete', ['rec-obsolete']), option('other-bundle', ['lec2', 'rec2'])],
+      registration: {
+        present: { optionStatuses: { lec1: 'locked', 'other-bundle': 'available' }, excludedOptionIds: ['lec1'], sectionStatuses: { 'rec-obsolete': 'unavailable', rec2: 'locked' }, excludedSectionIds: ['rec-obsolete'] },
+        past: [{ optionStatuses: { lec1: 'locked' }, excludedOptionIds: ['lec1'] }],
+      },
+    };
+    const added = [option('new-bundle', ['lec1', 'rec1'])];
+    const next = mergeEnrollmentOptions(old, course, 'lec1', ['lec1', 'rec1', 'rec-obsolete'], added);
+    expect(next.options.map((item) => item.id)).toEqual(['other-bundle', 'new-bundle']);
+    expect(next.intents[0]).toMatchObject({ required: false, requiredSectionIds: [], preferredSectionIds: ['lec2'] });
+    expect(next.registration.present).toMatchObject({ optionStatuses: { 'other-bundle': 'available' }, excludedOptionIds: [], sectionStatuses: { rec2: 'locked' }, excludedSectionIds: [] });
+    expect(next.registration.past[0]?.optionStatuses).toEqual({});
+    expect(mergeEnrollmentOptions(next, course, 'lec1', ['lec1', 'rec1'], added)).toEqual(next);
+    expect(mergeEnrollmentOptions(old, course, 'lec1', ['lec1'], [])).toBe(old);
+  });
+
   it('upgrades legacy single-section plans without changing option IDs', () => {
     const legacy = {
       courses: [{ id: 'c', code: 'C 1', title: 'Course' }],

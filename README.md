@@ -10,17 +10,18 @@ A Chrome extension that makes NYU Albert a little easier to use: fewer clicks, c
 - **Auto-select your School**: Set a default School for Course Search. Open the logged-in Course Search once so the extension can pick up the actual School options, then choose one in Settings.
 - **Course abbreviation recognition**: Search with shortcuts like `ICS`, `DL`, `WAI`, or `POH`, and they expand into full course names, regardless of capitalization. Abbreviations in course information also get their full names added. You can add, edit, or disable your own shortcuts.
 - **Press Enter to search**: Hit Enter in the course title / instructor keyword field or the course description field to search. Abbreviations are expanded along the way.
-- **Copy Class Number**: Copy it right next to the course information, without hunting for the number again.
 - **Session timeout helper**: Optionally click OK automatically when Albert warns that your session is about to expire. Off by default.
 
 ### Course details, schedules, and degree planning
 
 - **Course highlights**: Pull out meeting times, locations, instructors, prerequisites, extra fees, and special rules. Also show recognized major / Core categories and time conflicts with the current schedule plan. Each kind of highlight can be toggled separately.
 - **Schedule Lab**: Click `Add to Schedule Lab` in Albert to collect courses, browse candidate schedules and a weekly calendar, mark courses as required, lock or exclude sections, and rank plans with preferences like avoiding classes before 10 AM or on Fridays. You can also simulate getting a section, finding it full, or being waitlisted, explore alternatives, and undo changes.
+- **Linked recitations and labs**: Adding a lecture automatically includes its recitation or lab when there is only one choice. With multiple choices, a dialog shows times, instructors, and locations so you can keep one, several, or all alternatives. Each final schedule uses exactly one section of each required auxiliary type. Linked recitations and labs are added through their lecture, with no separate Add button.
+- **Consistent course colors**: All meetings for the same course share a color in the Schedule Lab calendar, including its lecture, recitation, and lab. Different courses get different colors, and switching candidate plans keeps those colors consistent.
 - **Degree Planner (in development)**: An early planning board for manually adding courses and moving them between Taken / In Progress / Planned. The CS and Economics curriculum data has not been entered yet, so degree requirement coverage and prerequisite checks are not ready to rely on.
 - **Settings and local data**: Includes a master switch, custom abbreviations, and highlight controls. Data stays in your browser, with options to export it or clear it all.
 
-**Schedule Lab is still under development and very rough around the edges.** The features above are an early version, and linked lecture / recitation / lab combinations are not fully connected yet. Double-check imported courses and generated schedules, and treat it as an experiment for now. Simulated registration outcomes are local records only; the extension never enrolls, drops, swaps, or submits waitlist requests for you.
+**Schedule Lab is still under development and very rough around the edges.** Linked-section import currently relies on the supported Albert results layout, so clear class filters before adding and double-check imported courses and generated schedules. Treat it as an experiment for now. Simulated registration outcomes are local records only; the extension never enrolls, drops, swaps, or submits waitlist requests for you.
 
 **Degree Planner is also still under development.** The interface is a starting point; CS and Economics data still needs to be added before it can provide useful degree progress checks.
 

@@ -1,10 +1,7 @@
-import type { EnrollmentOption, Meeting } from '../courses/types';
+import type { EnrollmentOption } from '../courses/types';
+import { meetingsConflict } from '../courses/meetings';
 
-export function meetingsConflict(left: Meeting, right: Meeting): boolean {
-  return left.day === right.day
-    && left.startMinute < right.endMinute
-    && right.startMinute < left.endMinute;
-}
+export { meetingsConflict } from '../courses/meetings';
 
 export function optionsConflict(left: EnrollmentOption, right: EnrollmentOption): boolean {
   return left.meetings.some((a) => right.meetings.some((b) => meetingsConflict(a, b)));

@@ -103,21 +103,21 @@ flowchart TB
 4. 文件导入必须无环；新增跨模块依赖也必须检查模块层面的方向，不能仅以「没有运行时循环」为依据。
 5. `EnrollmentOption` 是 solver 的原子选择；讲座、习题课与实验课之间的组合规则由 builder 负责，不能渗入 solver。
 
-当前上图列出的顶层模块依赖无环。core 内部存在 `courses` 与 `schedule` 目录间的双向依赖，虽然文件图无环，仍是待修正的模块边界问题，见第 5 节。
+顶层模块及 core 分区依赖保持单向：`courses/meetings.ts` 拥有 meeting 冲突原语，builder 与 schedule 均向下依赖 courses。schedule 保留原冲突函数导出以兼容调用方。
 
 ## 3. 排课数据流
 
-以下箭头表示数据转换，不表示导入方向。实线为当前 Albert → Schedule Lab 流程；虚线为已有 builder 能力的待接入路径。
+以下箭头表示数据转换，不表示导入方向。Albert 的关联课程导入已接入 builder；Provider 仍未连接入口。
 
 ```mermaid
 flowchart LR
   dom["Albert 课程 / section DOM"] --> parse["parseCourse<br/>Course + Section + CourseInformation"]
   parse --> highlight["分类 / 缩写 / 高亮<br/>呈现页面提示"]
-  parse --> add["用户点击 Add to Schedule Lab<br/>addToPlanner 创建单 section option"]
-  add --> data[("local:planner<br/>PlannerData v2")]
-  raw["RawCourseOffering<br/>sections + 要求 + 兼容规则<br/>Albert 尚未产出此契约"]
-  raw -.-> builder["buildEnrollmentOptions<br/>完整合法组合、排除内部冲突"]
-  builder -.->|"待接入持久化流程"| data
+  parse --> group["readSectionGroup<br/>当前课程、学期内的主课与 REC/LAB 分组"]
+  group --> picker["单个辅课自动保留<br/>多个辅课弹窗保留一项、多项或全部"]
+  picker --> builder["optionsForSectionGroup → buildEnrollmentOptions<br/>每种必需组件恰好一个，排除内部冲突"]
+  builder --> merge["mergeEnrollmentOptions<br/>替换当前主课备选及旧单 section 记录"]
+  merge --> data[("local:planner<br/>PlannerData v2")]
   data --> normalize["normalizePlannerData<br/>补齐兼容默认值"]
   normalize --> problem["ScheduleProblem<br/>intents + options + registration.present"]
   problem --> solve["solveSchedules<br/>约束过滤 + DFS 冲突剪枝"]
@@ -132,12 +132,15 @@ flowchart LR
 关键契约：
 
 - `Section` 是真实课程组件；`EnrollmentOption` 是一门课的一套完整可选组合，包含 `sectionIds`、合并后的会议和可选展示元数据。
-- builder 对未知多组件兼容关系返回空集合，避免生成未经确认的组合；当前 Albert 导入路径却直接把单个 section 当作 option，不能据此宣称已验证完整的多组件组合。
+- builder 对未知多组件兼容关系返回空集合。Albert adapter 根据已核对的按主课排列的 section 块构造显式关联规则：必须读取 `Component:`，同课程同学期内只收集主课后、下一主课前的 recitation/lab。筛选器可能隐藏组件时要求先清除；不能按老师、上课时间或是否有 Select Class 按钮判断类型。此布局约定及来源限制见 [Albert README](../src/adapters/albert/README.md)。
+- 一个辅课自动随主课加入；多项默认全选，用户至少保留每种组件的一项。每个保留组合独立存为 option，最终课表每门课只用一个组合。linked recitation/lab 不提供独立 Add 按钮。
 - `CourseIntent` 表达课程是否必选、可选 option 范围、section 要求/排除/偏好。精确 option 锁定与 section 锁定语义不同。
 - `RegistrationHistory` 包含 `present` 和 `past`。状态转换和撤销都产生新值；solver 只接收 `present`。
 - 可行性由 solver 决定，偏好由 ranking 决定；评分不改变可行性。`bruteForceSchedules` 是性质测试中的对照实现，没有运行入口调用。
 
 学位规划是另一条独立流程：`DegreePlanEntry[]` + 所选 `curricula/nyush` 数据 → `evaluateCurriculum` / `dependencyWarnings` → 学位覆盖情况与先修提示 → `local:degree-plan`。目前它与排课数据没有自动同步。
+
+课表外观由 `features/planner/calendarAppearance.ts` 提供纯函数：按完整已存课程列表的顺序分配不同色相，以 course ID 复用到同门课的所有组件；切换候选计划不重新配色。颜色不写入存储，也没有自定义设置。组件标签统一使用小写缩写（lecture 为 `lec`、recitation 为 `reci`）；缺少班次显示信息时保留原 section ID。时间定位和地点简写仍由 `calendarLayout.ts` 负责。验证见 `tests/features/calendarAppearance.test.ts`。
 
 ## 4. 本地状态与平台接口
 
@@ -150,7 +153,7 @@ flowchart LR
 
 `PlannerData` 的纯数据兼容与删除逻辑位于 `storage/plannerData.ts`，不导入 WXT；`planner.ts` 负责持久化绑定。兼容处理保留旧 option ID，补齐 section 状态、intent 和偏好默认值。
 
-`exportLocalData` 聚合四个 item；`deleteAllLocalData` 清除扩展的整个 local 存储区域。存储读写目前没有事务或并发合并机制。
+`exportLocalData` 聚合四个 item；`deleteAllLocalData` 清除扩展的整个 local 存储区域。存储读写没有跨文档事务。`plannerImport.ts` 串行化当前文档内的添加读改写；`mergeEnrollmentOptions` 以主课为更新范围，保留其他主课的组合及有效状态，清除被替换旧 option 的过期状态。多个文档同时保存仍可能覆盖，属于现存限制。
 
 平台接口只有三类：
 
@@ -162,13 +165,12 @@ flowchart LR
 
 ## 5. 现存边界问题与后续方向
 
-本次仅建立架构文档，以下事项未改动代码，也不作为已经实现的设计绘入当前流程。
+以下为当前剩余边界问题；已实现部分以本文数据流和模块说明为准。
 
 | 观察 | 影响 | 建议的最小后续变更 |
 | --- | --- | --- |
-| `courses/enrollmentOptionBuilder.ts` 导入 `schedule/conflicts.ts`，后者和其余 schedule 文件依赖 `courses/types.ts` | 文件图无环，但目录级 `courses ↔ schedule` 双向耦合，不满足严格模块 DAG 要求 | 将共享 meeting 冲突原语下沉至有明确所有权的底层模块；builder 与 schedule 单向引用，保持现有公共函数行为 |
-| `adapters/albert/enhancePage.ts` 同时处理 DOM、直接存储、排课计算与运行消息，并保存模块级 `latestSettings` | adapter 边界较宽，页面事件隐含依赖最近一次增强设置 | 将应用编排放到 content 的显式接口中，让 adapter 接收动作回调与计算结果；仅在相关功能变更时实施 |
-| builder 未接入 Albert 导入，Provider 没有入口调用，状态检测器仅有测试调用 | 核心能力的存在不等于端到端接入 | 接入前先确定可靠的组件兼容数据来源；不要猜测组合关系或注册结果 |
+| `adapters/albert/enhancePage.ts` 同时处理 DOM、排课计算与运行消息，并保存模块级 `latestSettings` | adapter 边界较宽，页面事件隐含依赖最近一次增强设置 | 将应用编排放到 content 的显式接口中，让 adapter 接收动作回调与计算结果；仅在相关功能变更时实施 |
+| Provider 没有入口调用，状态检测器仅有测试调用 | 外部数据及注册状态仍未端到端接入 | 接入前确定可靠的数据来源；Albert 已通过独立分组 adapter 接入 builder |
 | React 页面没有存储订阅，多个页面读改写同一 planner item | 打开的页面可能保留旧快照，并发保存可能覆盖数据 | 在需要跨页面同步时，明确统一更新入口与订阅生命周期 |
 
 ## 6. 验证与文档维护

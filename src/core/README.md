@@ -15,11 +15,13 @@
 
 ## 当前内部依赖
 
-箭头表示导入，包含类型导入。图拆开课程契约与构建器，以准确显示文件图无环的原因；**不能由此推断 courses 与 schedule 两个目录之间不存在双向依赖**。
+箭头表示导入，包含类型导入。courses 不导入 schedule；二者共用 courses 中的 meeting 冲突原语。
 
 ```mermaid
 flowchart TD
-  builder["courses/enrollmentOptionBuilder.ts"] --> conflicts["schedule/conflicts.ts"]
+  builder["courses/enrollmentOptionBuilder.ts"] --> overlap["courses/meetings.ts"]
+  conflicts["schedule/conflicts.ts"] --> overlap
+  overlap --> courseTypes
   builder --> courseTypes["courses/types.ts"]
   conflicts --> courseTypes
   schedule["schedule/solver.ts · ranking.ts<br/>analysis.ts · bruteForce.ts"] --> conflicts
@@ -43,10 +45,10 @@ flowchart TD
 - registration 转换返回新状态，历史由 `past` / `present` 显式表达；存储和 UI 更新由调用方负责。
 - 专业政策存在歧义时保留人工确认提示，不能自行推断满足条件。
 
-当前 Albert 添加流程尚未调用 builder；完整组合管线与接入差距见 [Schedule architecture](../../docs/SCHEDULE_ARCHITECTURE.md)。
+Albert 关联导入已调用 builder；源布局约定、弹窗选择与持久化管线见 [Schedule architecture](../../docs/SCHEDULE_ARCHITECTURE.md)。
 
 ## 测试与变更入口
 
 课程组合修改查看 `tests/courses/`；搜索、冲突和评分修改查看 `tests/schedule/`；模拟行为查看 `tests/registration/`；学位逻辑查看 `tests/curriculum/`。平台边界由 ESLint 与 `tests/architecture/core-boundary.test.ts` 检查。
 
-修改公共契约时，连同 adapter、存储兼容逻辑及现有调用方验证。共享冲突原语的目录所有权问题记录在架构入口中，未经实现不能将目录依赖标为已完全单向。
+修改公共契约时，连同 adapter、存储兼容逻辑及现有调用方验证。meeting 冲突原语归 courses 所有，schedule 只做兼容再导出，禁止重新引入 courses → schedule 的反向依赖。

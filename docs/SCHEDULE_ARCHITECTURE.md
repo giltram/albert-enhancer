@@ -16,7 +16,11 @@ Schedule Solver
 ScheduleCandidate[]
 ```
 
-This is the implemented builder/solver contract, not yet the end-to-end Albert import path. `adapters/albert/enhancePage.ts` currently wraps each imported section as a single-section EnrollmentOption and writes it directly to planner storage; it does not call `buildEnrollmentOptions` or produce `RawCourseOffering`. The course-data Provider is also not connected to an entrypoint and currently decodes already-formed options rather than calling the builder. Schedule Lab can consume multi-component options when they are present in storage, as exercised by the E2E fixture, but this does not establish valid linkage for sections imported individually from Albert.
+This pipeline is connected to Albert search imports. `sectionGroups.ts` reads the current course/term's ordered primary + REC/LAB blocks and produces explicit component requirements and compatibility rules. `sectionPicker.ts` retains user-selected alternatives (one per required type in a final schedule); `plannerImport.ts` builds complete options and persists one merged update through `mergeEnrollmentOptions`. Single-component imports retain legacy option IDs. Re-adding a group replaces its legacy standalone imports without removing other primary-section bundles.
+
+The observed Albert layout and limits are documented in the [Albert README](../src/adapters/albert/README.md). Classification uses `Component:`, never position alone, instructor, or native button presence. The adapter's ordered-block convention is not a universal catalog linkage rule. Filters that could hide components block import until cleared. Unknown/unreadable linked rows do not permit incomplete imports. A new layout or explicit multi-level linkage must be normalized in the adapter before invoking the builder.
+
+The course-data Provider is still not connected to an entrypoint and decodes already-formed options. Meeting overlap belongs to `courses/meetings.ts`; the builder does not import schedule.
 
 ## Terms
 

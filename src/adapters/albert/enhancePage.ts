@@ -5,10 +5,11 @@ import { nyushComputerScience, nyushEconomics } from '../../curricula/nyush';
 import { expandAbbreviations, resolveAbbreviationQuery } from '../../features/abbreviations';
 import { buildHighlights } from '../../features/highlighting';
 import type { AlbertEnhancerSettings } from '../../features/settings';
-import { normalizePlannerData, plannerItem } from '../../storage/planner';
 import type { PlannerData } from '../../storage/planner';
 import { applyCampusPreference } from './campusAdapter';
 import { parseCourse } from './courseParser';
+import { importSectionGroup } from './plannerImport';
+import { isAuxiliary, optionsForSectionGroup, readSectionGroup } from './sectionGroups';
 import { albertDescriptionSearchEvent, albertTitleSearchEvent } from './searchBridge';
 import { ALBERT_SELECTORS } from './selectors';
 import { applyTermPreference } from './termAdapter';
@@ -25,35 +26,6 @@ function highlightNode(kind: string, label: string, value: string, priority: str
   content.textContent = value;
   item.append(heading, content);
   return item;
-}
-
-async function addToPlanner(root: Element): Promise<void> {
-  const parsed = parseCourse(root);
-  if (parsed === undefined) return;
-  const current = normalizePlannerData(await plannerItem.getValue());
-  const option: EnrollmentOption = {
-    id: parsed.section.id,
-    courseId: parsed.course.id,
-    sectionIds: [parsed.section.id],
-    components: [{
-      sectionId: parsed.section.id,
-      componentType: parsed.section.componentType,
-      ...(parsed.section.sectionCode === undefined ? {} : { sectionCode: parsed.section.sectionCode }),
-      ...(parsed.section.classNumber === undefined ? {} : { classNumber: parsed.section.classNumber }),
-      meetings: parsed.section.meetings,
-      instructors: parsed.section.instructors ?? [],
-    }],
-    meetings: parsed.section.meetings,
-    instructors: parsed.section.instructors ?? [],
-  };
-  await plannerItem.setValue({
-    ...current,
-    courses: [...current.courses.filter((course) => course.id !== parsed.course.id), parsed.course],
-    options: [...current.options.filter((existing) => existing.id !== option.id), option],
-    intents: current.intents.some((intent) => intent.courseId === parsed.course.id)
-      ? current.intents
-      : [...current.intents, { courseId: parsed.course.id, required: true }],
-  });
 }
 
 function conflictsForCourse(parsedOption: EnrollmentOption, planner?: PlannerData) {
@@ -114,19 +86,36 @@ function enhanceCourse(root: Element, settings: AlbertEnhancerSettings, planner?
 
   const actions = document.createElement('div');
   actions.className = 'ae-actions';
-  const add = document.createElement('button');
-  add.type = 'button';
-  const alreadyAdded = planner?.options.some((existing) => existing.id === parsed.section.id) ?? false;
-  add.textContent = alreadyAdded ? 'Added' : 'Add to Schedule Lab';
-  add.disabled = alreadyAdded;
-  if (!alreadyAdded) add.addEventListener('click', () => { void addToPlanner(root).then(() => { add.textContent = 'Added'; }); });
-  actions.append(add);
-  if (parsed.section.classNumber !== undefined) {
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.textContent = 'Copy Class Number';
-    copy.addEventListener('click', () => { void navigator.clipboard.writeText(parsed.section.classNumber!); });
-    actions.append(copy);
+  if (!isAuxiliary(parsed.section.componentType)) {
+    const group = readSectionGroup(root);
+    const auxiliaryIds = group?.choices.flatMap((choice) => choice.sections.map((child) => child.section.id)) ?? [];
+    const expected = group === undefined ? [] : optionsForSectionGroup(group, auxiliaryIds);
+    const alreadyAdded = expected.some((option) => planner?.options.some((existing) => existing.id === option.id));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.textContent = alreadyAdded ? 'Added' : 'Add to Schedule Lab';
+    add.disabled = alreadyAdded;
+    const message = document.createElement('p');
+    message.className = 'ae-import-message';
+    message.setAttribute('role', 'status');
+    if (group !== undefined && group.choices.length > 0) {
+      message.textContent = group.choices.map((choice) => `${choice.sections.length} ${choice.componentType} option${choice.sections.length === 1 ? '' : 's'}`).join(' · ')
+        + ' included with this lecture';
+    }
+    if (!alreadyAdded) add.addEventListener('click', () => {
+      add.disabled = true;
+      void importSectionGroup(root, add).then((added) => {
+        add.textContent = added ? 'Added' : 'Add to Schedule Lab';
+        add.disabled = added;
+        if (!added && add.isConnected) add.focus();
+      }).catch((error: unknown) => {
+        message.textContent = error instanceof Error ? error.message : 'Could not save. Please try again.';
+        add.disabled = false;
+        if (add.isConnected) add.focus();
+      });
+    });
+    actions.append(add);
+    panel.append(message);
   }
   panel.append(actions);
   root.append(panel);

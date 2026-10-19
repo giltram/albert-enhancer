@@ -6,6 +6,7 @@ import type { RegistrationEvent } from '../../core/registration';
 import { analyzeCourseConflict, rankSchedules, solveSchedules } from '../../core/schedule';
 import type { RankedSchedule, SchedulePreferences } from '../../core/schedule';
 import { calendarBounds, calendarLocationLabel, calendarPlacement } from '../../features/planner/calendarLayout';
+import { calendarCourseColors, plannerComponentLabel } from '../../features/planner/calendarAppearance';
 import { normalizePlannerData, plannerItem, removeCourseFromPlanner } from '../../storage/planner';
 import type { PlannerData } from '../../storage/planner';
 import './style.css';
@@ -51,12 +52,6 @@ function componentTime(component: DisplayComponent): string {
   return component.meetings.map((meeting) => `${shortDays[meeting.day]} ${time(meeting.startMinute)}–${time(meeting.endMinute)}`).join(' · ') || 'Time TBA';
 }
 
-function componentName(component: EnrollmentComponent): string {
-  return component.sectionCode === undefined
-    ? component.sectionId
-    : `${component.componentType === 'other' ? '' : component.componentType.slice(0, 3).toLocaleUpperCase('en-US') + ' '}${component.sectionCode}`;
-}
-
 function optionMeetingEntries(option: EnrollmentOption): readonly { meeting: Meeting; component?: EnrollmentComponent }[] {
   if (option.components !== undefined && option.components.some((component) => (component.meetings?.length ?? 0) > 0)) {
     return option.components.flatMap((component) => (component.meetings ?? []).map((meeting) => ({ meeting, component })));
@@ -84,6 +79,10 @@ function App(): React.JSX.Element {
   const problem = useMemo(() => ({ intents: data.intents, options: data.options, registration: data.registration.present }), [data]);
   const schedules = useMemo(() => rankSchedules(solveSchedules(problem), data.preferences, problem), [problem, data.preferences]);
   const current = schedules[Math.min(selectedPlan, Math.max(0, schedules.length - 1))];
+  const courseColors = useMemo(() => calendarCourseColors([
+    ...data.courses.map((course) => course.id),
+    ...data.options.map((option) => option.courseId),
+  ]), [data.courses, data.options]);
   const candidateMeetings = current?.options.flatMap((option) => option.meetings) ?? [];
   const bounds = calendarBounds(candidateMeetings);
   const calendarSpan = bounds.endMinute - bounds.startMinute;
@@ -146,7 +145,7 @@ function App(): React.JSX.Element {
                   const required = intent.requiredSectionIds?.includes(component.sectionId) ?? false;
                   const excluded = intent.excludedSectionIds?.includes(component.sectionId) ?? false;
                   return <div className={`component-row ${required ? 'required' : ''} ${excluded ? 'excluded' : ''}`} key={component.sectionId}>
-                    <b>{componentName(component)}</b>
+                    <b>{plannerComponentLabel(component)}</b>
                     <span>{component.instructors?.map((instructor) => instructor.name).join(', ') || 'Instructor TBA'}</span>
                     <small>{componentTime(component)}</small>
                     <div className="row-actions">
@@ -171,7 +170,7 @@ function App(): React.JSX.Element {
               {isMultiComponent && <details className="exact-options"><summary>Exact enrollment options ({courseOptions.length})</summary>{courseOptions.map((option) => {
                 const status = data.registration.present.optionStatuses[option.id] ?? 'available';
                 const excluded = data.registration.present.excludedOptionIds.includes(option.id);
-                return <div className="exact-option" key={option.id}><span>{option.components?.map(componentName).join(' + ') ?? option.sectionIds.join(' + ')}</span><div className="row-actions"><button className="tiny" onClick={() => status === 'locked'
+                return <div className="exact-option" key={option.id}><span>{option.components?.map(plannerComponentLabel).join(' + ') ?? option.sectionIds.join(' + ')}</span><div className="row-actions"><button className="tiny" onClick={() => status === 'locked'
                   ? registrationEvent({ type: 'set-status', optionId: option.id, status: 'available' }, `${option.id} unlocked`)
                   : registrationEvent({ type: 'got-it', optionId: option.id }, `${option.id} locked`)}>{status === 'locked' ? 'Unlock exact' : 'Lock exact'}</button><button className="tiny" onClick={() => registrationEvent({ type: excluded ? 'include' : 'exclude', optionId: option.id }, `${option.id} ${excluded ? 'included' : 'excluded'}`)}>{excluded ? 'Include' : 'Exclude'}</button></div></div>;
               })}</details>}
@@ -185,10 +184,25 @@ function App(): React.JSX.Element {
             <div className="time-axis"><b aria-hidden="true">Time</b><div className="day-track">{hourMarks.map((minute) => <span className="time-label" key={minute} style={{ top: `${(minute - bounds.startMinute) / calendarSpan * 100}%` }}>{time(minute)}</span>)}</div></div>
             {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const).map((day) => <div className="day" key={day}><b>{shortDays[day]}</b><div className="day-track">{current.options.flatMap((option) => optionMeetingEntries(option).filter(({ meeting }) => meeting.day === day).map(({ meeting, component }, meetingIndex) => {
               const placement = calendarPlacement(meeting, bounds);
-              return <div className={`meeting component-${component?.componentType ?? 'other'}`} data-start-minute={meeting.startMinute} key={`${option.id}-${component?.sectionId ?? ''}-${meeting.startMinute}-${meetingIndex}`} style={{ top: `${placement.topPercent}%`, height: `${placement.heightPercent}%` }}><strong>{data.courses.find((course) => course.id === option.courseId)?.code}</strong>{component !== undefined && option.sectionIds.length > 1 && <small>{componentName(component)}</small>}<span>{time(meeting.startMinute)}–{time(meeting.endMinute)}</span>{meeting.location !== undefined && <small>{calendarLocationLabel(meeting.location)}</small>}</div>;
+              const color = courseColors.get(option.courseId);
+              return <div
+                className={`meeting component-${component?.componentType ?? 'other'}`}
+                data-course-id={option.courseId}
+                data-start-minute={meeting.startMinute}
+                key={`${option.id}-${component?.sectionId ?? ''}-${meeting.startMinute}-${meetingIndex}`}
+                style={{
+                  top: `${placement.topPercent}%`, height: `${placement.heightPercent}%`,
+                  borderLeftColor: color?.border, backgroundColor: color?.background,
+                }}
+              >
+                <strong>{data.courses.find((course) => course.id === option.courseId)?.code}</strong>
+                {component !== undefined && option.sectionIds.length > 1 && <small>{plannerComponentLabel(component)}</small>}
+                <span>{time(meeting.startMinute)}–{time(meeting.endMinute)}</span>
+                {meeting.location !== undefined && <small>{calendarLocationLabel(meeting.location)}</small>}
+              </div>;
             }))}</div></div>)}
           </div>}
-          {current !== undefined && <div className="candidate-components">{current.options.map((option) => <article key={option.id}><b>{data.courses.find((course) => course.id === option.courseId)?.title ?? option.courseId}</b>{option.components !== undefined && option.components.length > 1 ? option.components.map((component) => <div key={component.sectionId}><strong>{componentName(component)}</strong><span>{componentTime({ ...component, meetings: component.meetings ?? [] })}</span></div>) : <span>{optionTime(option)}</span>}</article>)}</div>}
+          {current !== undefined && <div className="candidate-components">{current.options.map((option) => <article key={option.id}><b>{data.courses.find((course) => course.id === option.courseId)?.title ?? option.courseId}</b>{option.components !== undefined && option.components.length > 1 ? option.components.map((component) => <div key={component.sectionId}><strong>{plannerComponentLabel(component)}</strong><span>{componentTime({ ...component, meetings: component.meetings ?? [] })}</span></div>) : <span>{optionTime(option)}</span>}</article>)}</div>}
           {current !== undefined && <Score schedule={current} />}
         </section>
 
@@ -208,11 +222,11 @@ function App(): React.JSX.Element {
         <div className="simulation-options">{data.courses.flatMap((course) => {
           const options = data.options.filter((option) => option.courseId === course.id);
           if (!options.some((option) => option.sectionIds.length > 1)) return options.map((option) => <div key={option.id}><b>{option.id}</b><div><button onClick={() => registrationEvent({ type: 'got-it', optionId: option.id }, `${option.id} Got it`)}>Got it</button><button onClick={() => registrationEvent({ type: 'full', optionId: option.id }, `${option.id} Full`)}>Full</button><button onClick={() => registrationEvent({ type: 'waitlisted', optionId: option.id }, `${option.id} Waitlisted`)}>Waitlisted</button></div></div>);
-          return componentsForOptions(options).map((component) => <div key={component.sectionId}><b>{componentName(component)}</b><div><button onClick={() => registrationEvent({ type: 'section-got-it', sectionId: component.sectionId }, `${component.sectionId} required`)}>Got it</button><button onClick={() => registrationEvent({ type: 'section-full', sectionId: component.sectionId }, `${component.sectionId} Full`)}>Full</button><button onClick={() => registrationEvent({ type: 'section-waitlisted', sectionId: component.sectionId }, `${component.sectionId} Waitlisted`)}>Waitlisted</button></div></div>);
+          return componentsForOptions(options).map((component) => <div key={component.sectionId}><b>{plannerComponentLabel(component)}</b><div><button onClick={() => registrationEvent({ type: 'section-got-it', sectionId: component.sectionId }, `${component.sectionId} required`)}>Got it</button><button onClick={() => registrationEvent({ type: 'section-full', sectionId: component.sectionId }, `${component.sectionId} Full`)}>Full</button><button onClick={() => registrationEvent({ type: 'section-waitlisted', sectionId: component.sectionId }, `${component.sectionId} Waitlisted`)}>Waitlisted</button></div></div>);
         })}</div>
       </section>
 
-      <section className="possibility panel"><div className="panel-heading"><div><small>POSSIBILITY VIEW</small><h2>All component meeting times</h2></div></div><div className="possibility-grid">{data.courses.flatMap((course) => componentsForOptions(data.options.filter((option) => option.courseId === course.id)).map((component) => <div className={`component-${component.componentType}`} key={`${course.id}-${component.sectionId}`}><b>{componentName(component)}</b><span>{componentTime(component)}</span></div>))}</div></section>
+      <section className="possibility panel"><div className="panel-heading"><div><small>POSSIBILITY VIEW</small><h2>All component meeting times</h2></div></div><div className="possibility-grid">{data.courses.flatMap((course) => componentsForOptions(data.options.filter((option) => option.courseId === course.id)).map((component) => <div className={`component-${component.componentType}`} key={`${course.id}-${component.sectionId}`}><b>{plannerComponentLabel(component)}</b><span>{componentTime(component)}</span></div>))}</div></section>
       <section className="matrix panel"><div className="panel-heading"><div><small>CONFLICT MATRIX</small><h2>Course-pair bottlenecks</h2></div></div>
         {conflicts.length === 0 ? <p>Add at least two courses to compare option conflicts.</p> : <table><thead><tr><th>Courses</th><th>Conflict ratio</th><th>Conflicting pairs</th></tr></thead><tbody>{conflicts.map((conflict) => <tr key={`${conflict.leftCourseId}-${conflict.rightCourseId}`}><td>{conflict.leftCourseId} × {conflict.rightCourseId}</td><td><b>{Math.round(conflict.ratio * 100)}%</b></td><td>{conflict.conflictingPairs.map((pair) => `${pair.leftOptionId} × ${pair.rightOptionId}`).join(', ') || 'None'}</td></tr>)}</tbody></table>}
       </section>

@@ -1,4 +1,4 @@
-import { meetingsConflict } from '../schedule/conflicts';
+import { meetingsConflict } from './meetings';
 import type {
   ComponentCompatibilityRule,
   ComponentRequirement,

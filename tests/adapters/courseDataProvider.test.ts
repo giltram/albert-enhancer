@@ -11,7 +11,7 @@ describe('course data providers', () => {
     await expect(provider.getEnrollmentOptions('cs')).resolves.toHaveLength(1);
   });
 
-  it('strictly decodes injected NYU transport data and drops malformed fields', async () => {
+  it('rejects a whole option when any meeting is invalid', async () => {
     const payload = { id: 'cs', code: 'CSCI-SHU 220', title: 'Algorithms', options: [{
       id: 'cs-1', sectionIds: ['001'], instructors: [{ name: 'Professor X' }],
       meetings: [{ day: 'tuesday', startMinute: 840, endMinute: 915 }, { day: 'noday', startMinute: 1, endMinute: 2 }],
@@ -19,7 +19,21 @@ describe('course data providers', () => {
     const provider = new NYUCourseDataProvider({ search: async () => [payload, { bad: true }], course: async () => payload });
     await expect(provider.searchCourses({ query: 'algo' })).resolves.toEqual([{ id: 'cs', code: 'CSCI-SHU 220', title: 'Algorithms' }]);
     const options = await provider.getEnrollmentOptions('cs');
-    expect(options[0]?.meetings).toHaveLength(1);
+    expect(options).toEqual([]);
+  });
+
+  it.each([undefined, 'TBA', [{ day: 'monday', startMinute: NaN, endMinute: 700 }], [{ day: 'monday', startMinute: 600, endMinute: Infinity }]])('rejects malformed meeting arrays: %j', async (meetings) => {
+    const payload = { id: 'c', code: 'C', title: 'C', options: [{ id: 'o', sectionIds: ['s'], meetings }] };
+    const provider = new NYUCourseDataProvider({ search: async () => [], course: async () => payload });
+    await expect(provider.getEnrollmentOptions('c')).resolves.toEqual([]);
+  });
+  it('retains explicit TBA but rejects invalid component meeting metadata', async () => {
+    const payload = { id: 'c', code: 'C', title: 'C', options: [
+      { id: 'tba', sectionIds: ['s'], meetings: [] },
+      { id: 'invalid', sectionIds: ['s'], meetings: [], components: [{ sectionId: 's', componentType: 'lab', meetings: [{ day: 'bad', startMinute: 600, endMinute: 700 }] }] },
+    ] };
+    const provider = new NYUCourseDataProvider({ search: async () => [], course: async () => payload });
+    expect((await provider.getEnrollmentOptions('c')).map((option) => option.id)).toEqual(['tba']);
   });
 
   it('preserves valid normalized component metadata', async () => {

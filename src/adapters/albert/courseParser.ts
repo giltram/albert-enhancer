@@ -1,8 +1,10 @@
 import type { Course, Meeting, Section, SectionComponentType, Weekday } from '../../core/courses';
 import type { CourseInformation } from '../../features/highlighting';
+import { readOfferingTerm } from './offeringTerm';
 import { ALBERT_SELECTORS } from './selectors';
 
 export interface ParsedAlbertCourse {
+  readonly term?: string;
   readonly course: Course;
   readonly section: Section;
   readonly information: CourseInformation;
@@ -183,7 +185,9 @@ function parseLoggedCourse(root: Element): ParsedAlbertCourse | undefined {
   const specialRule = relevantSentences(notes, /(?:instructor|department)\s+(?:permission|consent)|(?:restricted|reserved)\s+(?:to|for)|not\s+open\s+to|audition|application\s+required|enrollment\s+(?:permission|required)|co-?requisite/i);
   const courseId = identity.code.toLocaleUpperCase('en-US');
   const sectionId = `${courseId}:${sectionCode}`;
+  const term = readOfferingTerm(root);
   return {
+    ...(term === undefined ? {} : { term }),
     course: { id: courseId, code: identity.code, title: identity.title },
     section: {
       id: sectionId,
@@ -217,15 +221,19 @@ export function parseCourse(root: Element): ParsedAlbertCourse | undefined {
   if (code === undefined || title === undefined || sectionCode === undefined) return undefined;
   const meetingRoom = root.querySelector<HTMLElement>('.section--meeting_html [class*="meet-room-"]')?.textContent?.replace(/^\s*in\s+/i, '').trim();
   const location = meetingRoom || withoutLabel(text(root, ALBERT_SELECTORS.location), 'Location');
-  const instructor = text(root, ALBERT_SELECTORS.instructor);
+  const instructors = [...root.querySelectorAll(ALBERT_SELECTORS.instructor)].map((node) => node.textContent?.trim() ?? '').filter(Boolean);
+  const instructor = instructors.length === 0 ? undefined : instructors.join('; ');
   const prerequisite = withoutExpansionControl(text(root, ALBERT_SELECTORS.prerequisite));
   const extraFee = withoutExpansionControl(text(root, ALBERT_SELECTORS.extraFee));
   const specialRule = withoutExpansionControl(text(root, ALBERT_SELECTORS.specialRule));
   const meetings = [...root.querySelectorAll(ALBERT_SELECTORS.meetings)]
-    .flatMap((node) => parseMeetingText(node.textContent?.trim() ?? '', location));
+    .flatMap((node) => parseMeetingText(node.textContent?.trim() ?? '', node.getAttribute('data-ae-meeting-location') ?? location));
+  const degreeLabels = [...root.querySelectorAll('[data-ae-field="degree-label"]')].map((node) => node.textContent?.trim() ?? '').filter(Boolean);
   const courseId = code.toLocaleUpperCase('en-US');
   const sectionId = `${courseId}:${sectionCode}`;
+  const term = readOfferingTerm(root);
   return {
+    ...(term === undefined ? {} : { term }),
     course: { id: courseId, code, title },
     section: {
       id: sectionId,
@@ -233,7 +241,7 @@ export function parseCourse(root: Element): ParsedAlbertCourse | undefined {
       componentType: normalizeComponentType(text(root, ALBERT_SELECTORS.component)),
       sectionCode,
       ...((text(root, ALBERT_SELECTORS.classNumber) ?? /Class\s*#\s*(\d+)/i.exec(sectionSummary ?? '')?.[1]) === undefined ? {} : { classNumber: (text(root, ALBERT_SELECTORS.classNumber) ?? /Class\s*#\s*(\d+)/i.exec(sectionSummary ?? '')?.[1])! }),
-      instructors: instructor === undefined ? [] : [{ name: instructor }],
+      instructors: instructors.map((name) => ({ name })),
       meetings,
     },
     information: {
@@ -244,6 +252,7 @@ export function parseCourse(root: Element): ParsedAlbertCourse | undefined {
       ...(extraFee === undefined ? {} : { extraFee }),
       ...(specialRule === undefined ? {} : { specialRule }),
       classifications: ['unknown'],
+      ...(degreeLabels.length === 0 ? {} : { degreeLabels }),
     },
   };
 }

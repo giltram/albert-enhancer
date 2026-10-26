@@ -4,3 +4,4 @@ export * from './conflicts';
 export * from './ranking';
 export * from './solver';
 export * from './types';
+export * from './search';

@@ -49,6 +49,21 @@ describe('schedule ranking', () => {
     expect(rankSchedules(solveSchedules(problem), defaultSchedulePreferences, problem)).toEqual(ranked);
   });
 
+  it.each(['allowlist', 'exact-lock', 'section-lock', 'excluded'])('does not count prohibited backups: %s', (constraint) => {
+    const constrained: ScheduleProblem = {
+      ...problem,
+      intents: [{ courseId: 'course', required: true, ...(constraint === 'allowlist' ? { optionIds: [early.id] } : {}) }],
+      registration: {
+        optionStatuses: constraint === 'exact-lock' ? { [early.id]: 'locked' } : {},
+        excludedOptionIds: constraint === 'excluded' ? [late.id] : [],
+        sectionStatuses: constraint === 'section-lock' ? { early: 'locked' } : {},
+      },
+    };
+    const ranked = rankSchedules(solveSchedules(constrained), defaultSchedulePreferences, constrained);
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0]?.score.robustnessScore).toBe(0);
+  });
+
   it('uses component preferences as a soft ranking signal', () => {
     const preferredProblem: ScheduleProblem = {
       ...problem,

@@ -57,10 +57,11 @@ test('fixture course can be added, simulated, undone, and removed', async ({ ext
   const albert = await extensionContext.newPage();
   await albert.route('https://test.nyu.edu/course', (route) => route.fulfill({
     contentType: 'text/html',
-    body: `<article data-ae-course>
+    body: `<article data-ae-course data-ae-term="Spring 2027">
       <h2 data-ae-field="course-code">CSCI-SHU 220</h2>
       <div data-ae-field="course-title">Algorithms</div>
       <div data-ae-field="section-code">001</div>
+      <div data-ae-field="component">Lecture</div>
       <div data-ae-field="class-number">12345</div>
       <div data-ae-field="instructor">Professor X</div>
       <div data-ae-field="meeting">Tue / Thu · 14:00-15:15</div>
@@ -98,7 +99,7 @@ test('adding Wang machine learning from the second result preserves its course i
   const fixture = readFileSync('tests/fixtures/albert/logged-in-machine-learning.html', 'utf8');
   const albert = await extensionContext.newPage();
   await albert.route('https://sis.nyu.edu/machine-learning-results', (route) => route.fulfill({
-    contentType: 'text/html', body: fixture,
+    contentType: 'text/html', body: `<main data-ae-term="Spring 2027">${fixture}</main>`,
   }));
   await albert.goto('https://sis.nyu.edu/machine-learning-results');
   const business = albert.locator('[id="win0divSELECT_COURSE_row$0"]');
@@ -364,4 +365,48 @@ test('session timeout helper clicks only the enabled expiry warning', async ({ e
   const warning = await warningPromise;
   await expect(launcher.locator('body')).toHaveAttribute('data-timeout-reset', 'true');
   await expect.poll(() => warning.isClosed()).toBe(true);
+});
+
+
+test('cross-page imports preserve current preferences, weekend meetings, and semester isolation', async ({ extensionContext, extensionId }) => {
+  const [worker] = extensionContext.serviceWorkers();
+  await worker!.evaluate(async () => { await chrome.storage.local.remove('planner'); });
+  const source = (code: string, term = 'Spring 2027') => `<article data-ae-course data-ae-term="${term}">
+    <div data-ae-field="course-code">${code}</div><div data-ae-field="course-title">${code} class</div>
+    <div data-ae-field="section-code">001</div><div data-ae-field="component">Lecture</div>
+    <div data-ae-field="meeting">${code === 'A' ? 'Sat/Sun 10:00-11:00' : code === 'B' ? 'Mon 10:00-11:00' : 'Tue 10:00-11:00'}</div>
+  </article>`;
+  const pages = await Promise.all(Array.from({ length: 4 }, () => extensionContext.newPage()));
+  const [a, b, c, fall] = pages;
+  const planner = await extensionContext.newPage();
+  try {
+    for (const [page, code, term] of [[a!, 'A', 'Spring 2027'], [b!, 'B', 'Spring 2027'], [c!, 'C', 'Spring 2027'], [fall!, 'A', 'Fall 2027']] as const) {
+      await page.route(`https://test.nyu.edu/review-${code}-${term.replaceAll(' ', '-')}`, (route) => route.fulfill({ contentType: 'text/html', body: source(code, term) }));
+      await page.goto(`https://test.nyu.edu/review-${code}-${term.replaceAll(' ', '-')}`);
+    }
+    await a!.getByRole('button', { name: 'Add to Schedule Lab' }).click();
+    await expect(a!.getByRole('button', { name: 'Added' })).toBeDisabled();
+    await planner.goto(`chrome-extension://${extensionId}/planner.html`);
+    await expect(planner.locator('.meeting')).toHaveCount(2);
+    await expect(planner.locator('.day > b')).toHaveText(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+    await Promise.all([
+      b!.getByRole('button', { name: 'Add to Schedule Lab' }).click(),
+      c!.getByRole('button', { name: 'Add to Schedule Lab' }).click(),
+      planner.getByLabel('Avoid Friday').click(),
+    ]);
+    await expect(b!.getByRole('button', { name: 'Added' })).toBeDisabled();
+    await expect(c!.getByRole('button', { name: 'Added' })).toBeDisabled();
+    await expect(planner.locator('.course-title')).toHaveCount(3);
+    await expect(planner.getByLabel('Avoid Friday')).toBeChecked();
+    const stored = await worker!.evaluate(async () => (await chrome.storage.local.get('planner')).planner);
+    expect(stored).toMatchObject({ term: 'spring 2027', preferences: { avoidFriday: true } });
+    await expect(fall!.getByRole('button', { name: 'Add to Schedule Lab' })).toBeEnabled();
+    await fall!.getByRole('button', { name: 'Add to Schedule Lab' }).click();
+    await expect(fall!.getByRole('status')).toContainText('This plan belongs to spring 2027');
+    expect(await worker!.evaluate(async () => (await chrome.storage.local.get('planner')).planner)).toEqual(stored);
+  } finally {
+    await planner.close();
+    await Promise.all(pages.map((page) => page.close()));
+    await worker!.evaluate(async () => { await chrome.storage.local.remove('planner'); });
+  }
 });

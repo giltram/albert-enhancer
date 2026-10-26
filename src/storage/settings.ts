@@ -1,3 +1,4 @@
+import { sendStorageCommand } from './commands';
 import { storage } from '@wxt-dev/storage';
 import type { AlbertEnhancerSettings } from '../features/settings/types';
 import { defaultSettings } from '../features/settings/types';
@@ -17,5 +18,5 @@ export async function exportLocalData(): Promise<string> {
 }
 
 export async function deleteAllLocalData(): Promise<void> {
-  await storage.clear('local');
+  await sendStorageCommand({ type: 'clear-local-data' });
 }

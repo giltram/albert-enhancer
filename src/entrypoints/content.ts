@@ -1,8 +1,10 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import { captureSanitizedFixture, collectCampusOptions, confirmSessionExpiry, enhanceAlbertPage } from '../adapters/albert';
+import { captureSanitizedFixture, collectCampusOptions, confirmSessionExpiry, disposeAlbertPage, enhanceAlbertPage } from '../adapters/albert';
 import { settingsItem } from '../storage/settings';
 import { normalizePlannerData, plannerItem } from '../storage/planner';
 import { campusOptionsItem } from '../storage/campuses';
+import type { ScheduleSearchResult } from '../core/schedule';
+import { searchSchedulePreview } from '../features/planner/scheduleSearch';
 import { albertMainBridgeReadyEvent } from '../adapters/albert/searchBridge';
 import '../adapters/albert/enhancements.css';
 
@@ -13,6 +15,7 @@ export default defineContentScript({
     if (ctx.isInvalid) return;
     document.documentElement.dataset.albertEnhancer = 'active';
     ctx.onInvalidated(() => {
+      disposeAlbertPage(document);
       for (const panel of document.querySelectorAll('[data-ae-enhancement], .ae-fixture-capture')) panel.remove();
       delete document.documentElement.dataset.albertEnhancer;
     });
@@ -22,10 +25,33 @@ export default defineContentScript({
     if (ctx.isInvalid) return;
     let lastCampusOptions = JSON.stringify(await campusOptionsItem.getValue());
     if (ctx.isInvalid) return;
+    let preview: ScheduleSearchResult | undefined;
+    let previewPlanner: typeof planner | undefined;
+    let previewController: AbortController | undefined;
+    ctx.onInvalidated(() => previewController?.abort());
+    const updatePreview = (): void => {
+      if (!settings.enabled || !settings.highlights.conflicts || planner.options.length === 0) {
+        previewController?.abort(); previewPlanner = undefined; preview = undefined;
+        return;
+      }
+      if (previewPlanner === planner) return;
+      previewController?.abort();
+      const controller = new AbortController();
+      previewController = controller;
+      previewPlanner = planner;
+      preview = undefined;
+      const problem = { intents: planner.intents, options: planner.options, registration: planner.registration.present };
+      void searchSchedulePreview(problem, planner.preferences, controller.signal).then((result) => {
+        if (ctx.isInvalid || controller.signal.aborted || result === undefined) return;
+        preview = result;
+        refresh();
+      });
+    };
     const enhance = (): void => {
       if (ctx.isInvalid) return;
-      confirmSessionExpiry(document, settings.keepSessionAlive);
-      enhanceAlbertPage(document, settings, planner);
+      updatePreview();
+      confirmSessionExpiry(document, settings.enabled && settings.keepSessionAlive);
+      enhanceAlbertPage(document, settings, planner, preview);
       const campusOptions = collectCampusOptions(document);
       const serialized = JSON.stringify(campusOptions);
       if (campusOptions.length > 0 && serialized !== lastCampusOptions) {

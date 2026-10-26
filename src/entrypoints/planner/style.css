@@ -10,7 +10,7 @@ h1, h2, h3 { margin: 0; }.header-stat { display: grid; text-align: right; }.head
 .course { padding: 13px 0; border-top: 1px solid #eee8f1; }.course-title { display: flex; justify-content: space-between; gap: 8px; }.course-title div { display: grid; }.course-title span { color: #746a79; font-size: 12px; }
 .course label, .preference label { display: flex; gap: 7px; margin: 10px 0; font-size: 12px; }details { margin: 7px 0; padding: 7px; border-radius: 7px; background: #f7f4f9; font-size: 11px; }summary { cursor: pointer; }summary em { float: right; color: #7b547e; }
 .remove-course { align-self: start; flex: none; border: 1px solid #d7aab2; padding: 4px 7px; background: white; color: #8b2638; font-size: 10px; font-weight: 700; }
-.calendar-grid { display: grid; grid-template-columns: 48px repeat(5, minmax(86px, 1fr)); gap: 5px; min-width: 520px; overflow-x: auto; }
+.calendar-grid { display: grid; grid-template-columns: 48px repeat(var(--calendar-days, 5), minmax(60px, 1fr)); gap: 5px; min-width: 520px; overflow-x: auto; }
 .day, .time-axis { min-width: 0; color: #706576; font-size: 12px; text-align: center; }
 .day > b, .time-axis > b { display: block; height: 28px; padding: 5px 2px; }
 .day-track { position: relative; height: 620px; border: 1px solid #e8e1eb; border-radius: 7px; background: repeating-linear-gradient(to bottom, #faf8fb 0, #faf8fb calc(100% / var(--calendar-hours) - 1px), #e8e1eb calc(100% / var(--calendar-hours) - 1px), #e8e1eb calc(100% / var(--calendar-hours))); }

@@ -1,4 +1,5 @@
 import type { EnrollmentOption, Weekday } from '../courses/types';
+import { eligibleOptions } from './eligibility';
 import { optionsConflict } from './conflicts';
 import type { ScheduleCandidate, ScheduleProblem } from './types';
 
@@ -101,33 +102,12 @@ function daysOffScore(options: readonly EnrollmentOption[], preferences: Schedul
 /** Percentage of selected options having at least one currently feasible replacement. */
 export function robustnessScore(candidate: ScheduleCandidate, problem?: ScheduleProblem): number {
   if (candidate.options.length === 0 || problem === undefined) return 0;
-  const excluded = new Set(problem.registration.excludedOptionIds);
-  const globallyExcludedSections = new Set(problem.registration.excludedSectionIds);
   let replaceable = 0;
   for (const selected of candidate.options) {
     const remainder = candidate.options.filter((option) => option.id !== selected.id);
     const intent = problem.intents.find((item) => item.courseId === selected.courseId);
-    const lockedSections = Object.entries(problem.registration.sectionStatuses ?? {})
-      .filter(([, status]) => status === 'locked')
-      .map(([id]) => id)
-      .filter((id) => problem.options.some((option) => option.courseId === selected.courseId && option.sectionIds.includes(id)));
-    const requiredSections = new Set([...(intent?.requiredSectionIds ?? []), ...lockedSections]);
-    const excludedSections = new Set([...globallyExcludedSections, ...(intent?.excludedSectionIds ?? [])]);
-    const hasBackup = problem.options.some((option) => {
-      const status = problem.registration.optionStatuses[option.id] ?? 'available';
-      return option.courseId === selected.courseId
-        && option.id !== selected.id
-        && !excluded.has(option.id)
-        && [...requiredSections].every((id) => option.sectionIds.includes(id))
-        && option.sectionIds.every((id) => !excludedSections.has(id))
-        && option.sectionIds.every((id) => {
-          const sectionStatus = problem.registration.sectionStatuses?.[id] ?? 'available';
-          return sectionStatus !== 'unavailable' && sectionStatus !== 'waitlisted';
-        })
-        && status !== 'unavailable'
-        && status !== 'waitlisted'
-        && remainder.every((other) => !optionsConflict(option, other));
-    });
+    const hasBackup = intent !== undefined && eligibleOptions(problem, intent).some((option) =>
+      option.id !== selected.id && remainder.every((other) => !optionsConflict(option, other)));
     if (hasBackup) replaceable += 1;
   }
   return round((replaceable / candidate.options.length) * 100);

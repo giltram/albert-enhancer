@@ -1,10 +1,6 @@
-import { mergeEnrollmentOptions, normalizePlannerData, plannerItem } from '../../storage/planner';
+import { updatePlanner } from '../../storage/commands';
 import { hasComponentFilters, optionsForSectionGroup, readSectionGroup } from './sectionGroups';
 import { chooseAuxiliarySections } from './sectionPicker';
-
-// Serialize this document's read-modify-write operations after the picker closes.
-// Storage still has no cross-document transaction; see architecture.md.
-let pendingImport = Promise.resolve();
 
 export async function importSectionGroup(root: Element, trigger: HTMLElement): Promise<boolean> {
   if (hasComponentFilters(root)) throw new Error('Clear class filters before adding so all linked recitation / lab options are visible.');
@@ -20,12 +16,8 @@ export async function importSectionGroup(root: Element, trigger: HTMLElement): P
   }
   const options = optionsForSectionGroup(group, selectedIds);
   if (options.length === 0) throw new Error('These sections have no compatible combination. Keep at least one non-overlapping option of each required type.');
-  const save = pendingImport.then(async () => {
-    const current = normalizePlannerData(await plannerItem.getValue());
-    await plannerItem.setValue(mergeEnrollmentOptions(current, group.primary.course, group.primary.section.id,
-      [group.primary.section.id, ...allIds], options));
-  });
-  pendingImport = save.catch(() => {});
-  await save;
+  if (group.primary.term === undefined) throw new Error('Could not identify this semester. Select a semester and refresh the search before importing.');
+  await updatePlanner({ type: 'import', course: group.primary.course, primarySectionId: group.primary.section.id,
+    sectionIds: [group.primary.section.id, ...allIds], options, term: group.primary.term });
   return true;
 }

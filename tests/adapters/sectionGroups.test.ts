@@ -63,6 +63,14 @@ describe('linked Albert component groups', () => {
     expect(readSectionGroup(section(0))).toBeUndefined();
   });
 
+  it.each(['', 'Unrecognized component'])('rejects missing or unknown metadata without dropping a required recitation: %s', (value) => {
+    load('logged-in-machine-learning.html');
+    const component = [...section(2).querySelectorAll('div')].find((node) => node.textContent?.includes('Component:'))!;
+    component.textContent = value;
+    expect(readSectionGroup(section(1))).toBeUndefined();
+    expect(readSectionGroup(section(2))).toBeUndefined();
+  });
+
   it('flags component filters that can hide required linked sections', () => {
     load('linked-programming.html');
     document.body.insertAdjacentHTML('afterbegin', '<select id="NYU_CLS_WRK_SSR_COMPONENT$27$"><option>Lecture</option><option value=""> </option></select>');

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentScriptContext } from 'wxt/utils/content-script-context';
+import { defaultSettings } from '../../src/features/settings/types';
+import { emptyPlannerData } from '../../src/storage/plannerData';
 import script from '../../src/entrypoints/content';
 import { albertMainBridgeReadyEvent } from '../../src/adapters/albert/searchBridge';
 
@@ -10,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   planner: { getValue: vi.fn(), watch: vi.fn() },
   campuses: { getValue: vi.fn(), setValue: vi.fn() },
   enhance: vi.fn(),
+  dispose: vi.fn(),
+  confirm: vi.fn(),
   unwatchSettings: vi.fn(),
   unwatchPlanner: vi.fn(),
 }));
@@ -21,7 +25,8 @@ vi.mock('../../src/storage/campuses', () => ({ campusOptionsItem: mocks.campuses
 vi.mock('../../src/adapters/albert', () => ({
   captureSanitizedFixture: vi.fn(),
   collectCampusOptions: () => [],
-  confirmSessionExpiry: vi.fn(),
+  confirmSessionExpiry: mocks.confirm,
+  disposeAlbertPage: mocks.dispose,
   enhanceAlbertPage: mocks.enhance,
 }));
 
@@ -31,8 +36,8 @@ describe('content script lifecycle', () => {
     vi.resetAllMocks();
     document.body.innerHTML = '';
     mocks.runtime.id = 'test-extension';
-    mocks.settings.getValue.mockResolvedValue({ keepSessionAlive: false });
-    mocks.planner.getValue.mockResolvedValue({});
+    mocks.settings.getValue.mockResolvedValue(defaultSettings);
+    mocks.planner.getValue.mockResolvedValue(emptyPlannerData);
     mocks.campuses.getValue.mockResolvedValue([]);
     mocks.settings.watch.mockReturnValue(mocks.unwatchSettings);
     mocks.planner.watch.mockReturnValue(mocks.unwatchPlanner);
@@ -50,6 +55,7 @@ describe('content script lifecycle', () => {
     await vi.waitFor(() => { expect(mocks.unwatchSettings).toHaveBeenCalledOnce(); });
     expect(mocks.unwatchPlanner).toHaveBeenCalledOnce();
     expect(document.querySelector('[data-ae-enhancement]')).toBeNull();
+    expect(mocks.dispose).toHaveBeenCalledWith(document);
     expect(document.documentElement.dataset.albertEnhancer).toBeUndefined();
 
     document.body.append(document.createElement('p'));
@@ -58,6 +64,12 @@ describe('content script lifecycle', () => {
     settingsChanged({ keepSessionAlive: true });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.enhance).toHaveBeenCalledTimes(enhancementsBeforeReload);
+  });
+
+  it('does not renew sessions when the master switch is disabled', async () => {
+    mocks.settings.getValue.mockResolvedValue({ enabled: false, keepSessionAlive: true });
+    await script.main(ctx);
+    expect(mocks.confirm).toHaveBeenCalledWith(document, false);
   });
 
   it('does not continue initialization if invalidated during a storage read', async () => {

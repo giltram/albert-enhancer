@@ -31,15 +31,23 @@ function meeting(value: unknown): Meeting | undefined {
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.day !== 'string' || !weekdays.has(candidate.day as Weekday)
     || typeof candidate.startMinute !== 'number' || typeof candidate.endMinute !== 'number'
+    || !Number.isFinite(candidate.startMinute) || !Number.isFinite(candidate.endMinute)
     || candidate.startMinute < 0 || candidate.endMinute <= candidate.startMinute || candidate.endMinute > 1440) return undefined;
   return { day: candidate.day as Weekday, startMinute: candidate.startMinute, endMinute: candidate.endMinute, ...(typeof candidate.location === 'string' ? { location: candidate.location } : {}) };
+}
+/** Empty arrays mean TBA; malformed or missing meeting arrays are decode failures. */
+function decodeMeetings(value: unknown): readonly Meeting[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = value.map(meeting);
+  return result.every((item): item is Meeting => item !== undefined) ? result : undefined;
 }
 function component(value: unknown): EnrollmentComponent | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.sectionId !== 'string' || typeof candidate.componentType !== 'string'
     || !componentTypes.has(candidate.componentType as SectionComponentType)) return undefined;
-  const meetings = Array.isArray(candidate.meetings) ? candidate.meetings.map(meeting).filter((item): item is Meeting => item !== undefined) : undefined;
+  const meetings = candidate.meetings === undefined ? undefined : decodeMeetings(candidate.meetings);
+  if (candidate.meetings !== undefined && meetings === undefined) return undefined;
   const instructors = Array.isArray(candidate.instructors) ? candidate.instructors.flatMap((item) => typeof item === 'object' && item !== null && typeof (item as Record<string, unknown>).name === 'string' ? [{ name: (item as Record<string, unknown>).name as string }] : []) : undefined;
   return {
     sectionId: candidate.sectionId,
@@ -58,10 +66,14 @@ function decodeRecord(value: unknown): NYUCourseRecord | undefined {
     if (typeof raw !== 'object' || raw === null) return [];
     const option = raw as Record<string, unknown>;
     if (typeof option.id !== 'string' || !isStringArray(option.sectionIds)) return [];
-    const meetings = Array.isArray(option.meetings) ? option.meetings.map(meeting).filter((item): item is Meeting => item !== undefined) : [];
+    const meetings = decodeMeetings(option.meetings);
+    if (meetings === undefined) return [];
     const instructors = Array.isArray(option.instructors) ? option.instructors.flatMap((item) => typeof item === 'object' && item !== null && typeof (item as Record<string, unknown>).name === 'string' ? [{ name: (item as Record<string, unknown>).name as string }] : []) : [];
-    const components = Array.isArray(option.components) ? option.components.map(component).filter((item): item is EnrollmentComponent => item !== undefined) : undefined;
-    return [{ id: option.id, sectionIds: option.sectionIds, meetings, instructors, ...(components === undefined ? {} : { components }) }];
+    if (option.components !== undefined && !Array.isArray(option.components)) return [];
+    const components = Array.isArray(option.components) ? option.components.map(component) : undefined;
+    if (components?.some((item) => item === undefined)) return [];
+    const validComponents = components as readonly EnrollmentComponent[] | undefined;
+    return [{ id: option.id, sectionIds: option.sectionIds, meetings, instructors, ...(validComponents === undefined ? {} : { components: validComponents }) }];
   }) : [];
   return { id: record.id, code: record.code, title: record.title, ...(typeof record.description === 'string' ? { description: record.description } : {}), options: decodedOptions };
 }

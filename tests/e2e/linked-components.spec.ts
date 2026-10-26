@@ -6,6 +6,12 @@ declare const chrome: {
   storage: { local: { get(key: string): Promise<Record<string, unknown>>; remove(key: string): Promise<void> } };
 };
 
+// This reduced captured DOM omits the semester controls. The replay supplies its
+// documented source semester explicitly, without changing the captured markup.
+function springMachineLearningFixture(): string {
+  return `<main data-ae-term="Spring 2027">${readFileSync('tests/fixtures/albert/logged-in-machine-learning.html', 'utf8')}</main>`;
+}
+
 test.beforeEach(async ({ extensionContext }) => {
   const [worker] = extensionContext.serviceWorkers();
   const background = worker ?? await extensionContext.waitForEvent('serviceworker');
@@ -14,7 +20,7 @@ test.beforeEach(async ({ extensionContext }) => {
 
 test('both Machine Learning lectures automatically include their own recitation', async ({ extensionContext, extensionId }) => {
   const page = await extensionContext.newPage();
-  await page.route('https://sis.nyu.edu/linked-machine-learning', (route) => route.fulfill({ contentType: 'text/html', body: readFileSync('tests/fixtures/albert/logged-in-machine-learning.html', 'utf8') }));
+  await page.route('https://sis.nyu.edu/linked-machine-learning', (route) => route.fulfill({ contentType: 'text/html', body: springMachineLearningFixture() }));
   await page.goto('https://sis.nyu.edu/linked-machine-learning');
   const lecture = (index: number) => page.locator(`[id="win0divNYU_CLS_DTL_CLASS_NBR$${index}"]`);
   await expect(lecture(2).getByRole('button', { name: 'Add to Schedule Lab' })).toHaveCount(0);
@@ -162,7 +168,7 @@ test('a changed search invalidates a picker without importing stale sections', a
 
 test('rapid imports in one document preserve both courses', async ({ extensionContext }) => {
   const page = await extensionContext.newPage();
-  await page.route('https://sis.nyu.edu/concurrent-imports', (route) => route.fulfill({ contentType: 'text/html', body: readFileSync('tests/fixtures/albert/logged-in-machine-learning.html', 'utf8') }));
+  await page.route('https://sis.nyu.edu/concurrent-imports', (route) => route.fulfill({ contentType: 'text/html', body: springMachineLearningFixture() }));
   await page.goto('https://sis.nyu.edu/concurrent-imports');
   await expect(page.getByRole('button', { name: 'Add to Schedule Lab' })).toHaveCount(3);
   // Dispatch both user actions in one task before either storage read resolves.
@@ -179,7 +185,7 @@ test('rapid imports in one document preserve both courses', async ({ extensionCo
 
 test('an incompatible automatic recitation never saves a lecture-only option or displays Added', async ({ extensionContext }) => {
   const page = await extensionContext.newPage();
-  const fixture = readFileSync('tests/fixtures/albert/logged-in-machine-learning.html', 'utf8')
+  const fixture = springMachineLearningFixture()
     .replace('Fri 11.15 AM - 12.30 PM at Shanghai Room E204', 'Tue 12.45 PM - 2.00 PM at Shanghai Room E204');
   await page.route('https://sis.nyu.edu/incompatible-components', (route) => route.fulfill({ contentType: 'text/html', body: fixture }));
   await page.goto('https://sis.nyu.edu/incompatible-components');

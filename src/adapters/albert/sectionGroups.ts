@@ -27,7 +27,7 @@ export function isAuxiliary(type: string): type is AuxiliaryType {
  */
 export function readSectionGroup(root: Element): AlbertSectionGroup | undefined {
   const primary = parseCourse(root);
-  if (primary === undefined || isAuxiliary(primary.section.componentType)) return undefined;
+  if (primary === undefined || primary.section.componentType === 'other' || isAuxiliary(primary.section.componentType)) return undefined;
   const list = root.closest(ALBERT_SELECTORS.loggedSectionList);
   if (list === null) return { primary, choices: [] };
   const roots = [...list.querySelectorAll(ALBERT_SELECTORS.courseRoot)];
@@ -37,8 +37,9 @@ export function readSectionGroup(root: Element): AlbertSectionGroup | undefined 
   for (const childRoot of roots.slice(start + 1)) {
     const child = parseCourse(childRoot);
     // An unreadable row is a boundary, not permission to guess past it.
-    if (child === undefined) return undefined;
-    if (child.course.id !== primary.course.id || !isAuxiliary(child.section.componentType)) break;
+    if (child === undefined || child.section.componentType === 'other') return undefined;
+    if (child.term !== primary.term || child.course.id !== primary.course.id) return undefined;
+    if (!isAuxiliary(child.section.componentType)) break;
     auxiliaries.push(child);
   }
   return {

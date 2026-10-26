@@ -26,6 +26,13 @@ describe('planner persistence migration', () => {
     expect(mergeEnrollmentOptions(old, course, 'lec1', ['lec1'], [])).toBe(old);
   });
 
+  it('preserves course order when reimporting another primary, keeping calendar colors stable', () => {
+    const course = { id: 'a', code: 'A', title: 'A' };
+    const value = { ...emptyPlannerData, courses: [course, { id: 'b', code: 'B', title: 'B' }] };
+    const option = { id: 'a:002', courseId: 'a', sectionIds: ['a:002'], meetings: [], instructors: [] };
+    expect(mergeEnrollmentOptions(value, course, 'a:002', ['a:002'], [option]).courses.map((item) => item.id)).toEqual(['a', 'b']);
+  });
+
   it('upgrades legacy single-section plans without changing option IDs', () => {
     const legacy = {
       courses: [{ id: 'c', code: 'C 1', title: 'Course' }],

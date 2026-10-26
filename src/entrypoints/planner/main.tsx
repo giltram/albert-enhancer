@@ -1,14 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { EnrollmentComponent, EnrollmentOption, Meeting, SectionComponentType, Weekday } from '../../core/courses';
-import { transition, undo } from '../../core/registration';
 import type { RegistrationEvent } from '../../core/registration';
-import { analyzeCourseConflict, rankSchedules, solveSchedules } from '../../core/schedule';
-import type { RankedSchedule, SchedulePreferences } from '../../core/schedule';
+import { analyzeCourseConflict } from '../../core/schedule';
+import type { RankedSchedule } from '../../core/schedule';
 import { calendarBounds, calendarPlacement } from '../../features/planner/calendarLayout';
 import { calendarCourseColors, calendarCourseTitle, plannerComponentLabel } from '../../features/planner/calendarAppearance';
-import { normalizePlannerData, plannerItem, removeCourseFromPlanner } from '../../storage/planner';
-import type { PlannerData } from '../../storage/planner';
+import { normalizePlannerData, plannerItem } from '../../storage/planner';
+import { updatePlanner } from '../../storage/commands';
+import type { PlannerMutation } from '../../storage/mutations';
+import { useStoredValue } from '../shared/useStoredValue';
+import { useSchedules } from './useSchedules';
 import './style.css';
 
 const initialData = normalizePlannerData(await plannerItem.getValue());
@@ -59,10 +61,6 @@ function optionMeetingEntries(option: EnrollmentOption): readonly { meeting: Mee
   return option.meetings.map((meeting) => ({ meeting }));
 }
 
-function withoutEarlyPreference(preferences: SchedulePreferences): SchedulePreferences {
-  return Object.fromEntries(Object.entries(preferences).filter(([key]) => key !== 'avoidBeforeMinute')) as unknown as SchedulePreferences;
-}
-
 function Score({ schedule }: { schedule: RankedSchedule }): React.JSX.Element {
   return <div className="score-grid">
     <span>Professor <b>{schedule.score.professorScore}</b></span><span>Time <b>{schedule.score.timeScore}</b></span>
@@ -72,12 +70,16 @@ function Score({ schedule }: { schedule: RankedSchedule }): React.JSX.Element {
 }
 
 function App(): React.JSX.Element {
-  const [data, setData] = useState<PlannerData>(initialData);
+  const data = useStoredValue(plannerItem, initialData, normalizePlannerData);
+  const [saveError, setSaveError] = useState<string>();
   const [selectedPlan, setSelectedPlan] = useState(0);
   const [lastChange, setLastChange] = useState<string>();
-  const persist = (next: PlannerData): void => { setData(next); void plannerItem.setValue(next); };
+  const persist = (change: PlannerMutation): void => {
+    void updatePlanner(change).then(() => setSaveError(undefined), (error: unknown) => setSaveError(error instanceof Error ? error.message : 'Could not save.'));
+  };
   const problem = useMemo(() => ({ intents: data.intents, options: data.options, registration: data.registration.present }), [data]);
-  const schedules = useMemo(() => rankSchedules(solveSchedules(problem), data.preferences, problem), [problem, data.preferences]);
+  const search = useSchedules(problem, data.preferences);
+  const schedules = search?.schedules ?? [];
   const current = schedules[Math.min(selectedPlan, Math.max(0, schedules.length - 1))];
   const courseTitles = useMemo(() => new Map(data.courses.map((course) => [course.id, calendarCourseTitle(course)])), [data.courses]);
   const courseColors = useMemo(() => calendarCourseColors([
@@ -90,40 +92,33 @@ function App(): React.JSX.Element {
   const hourMarks = Array.from({ length: Math.floor(calendarSpan / 60) + 1 }, (_, index) => bounds.startMinute + index * 60);
 
   const removeCourse = (courseId: string): void => {
-    persist(removeCourseFromPlanner(data, courseId));
+    persist({ type: 'remove', courseId });
     setSelectedPlan(0);
     setLastChange(undefined);
   };
   const registrationEvent = (event: RegistrationEvent, message: string): void => {
-    const before = schedules.length;
-    persist({ ...data, registration: transition(data.registration, event) });
+    const before = search?.count ?? 0;
+    persist({ type: 'registration', event });
     setSelectedPlan(0);
     setLastChange(`${message} · ${before} possibilities before update`);
   };
   const toggleIntentSection = (courseId: string, field: 'preferredSectionIds' | 'requiredSectionIds' | 'excludedSectionIds', sectionId: string): void => {
-    persist({
-      ...data,
-      intents: data.intents.map((intent) => {
-        if (intent.courseId !== courseId) return intent;
-        const currentValues = intent[field] ?? [];
-        const active = currentValues.includes(sectionId);
-        const next = active ? currentValues.filter((id) => id !== sectionId) : [...currentValues, sectionId].sort();
-        if (field === 'requiredSectionIds' && !active) return { ...intent, requiredSectionIds: next, excludedSectionIds: (intent.excludedSectionIds ?? []).filter((id) => id !== sectionId) };
-        if (field === 'excludedSectionIds' && !active) return { ...intent, excludedSectionIds: next, requiredSectionIds: (intent.requiredSectionIds ?? []).filter((id) => id !== sectionId), preferredSectionIds: (intent.preferredSectionIds ?? []).filter((id) => id !== sectionId) };
-        return { ...intent, [field]: next };
-      }),
-    });
+    const active = !(data.intents.find((intent) => intent.courseId === courseId)?.[field] ?? []).includes(sectionId);
+    persist({ type: 'section', courseId, field, sectionId, active });
     setSelectedPlan(0);
   };
   const resetIntentSections = (courseId: string): void => {
-    persist({ ...data, intents: data.intents.map((intent) => intent.courseId === courseId ? { ...intent, preferredSectionIds: [], requiredSectionIds: [], excludedSectionIds: [] } : intent) });
+    persist({ type: 'reset-sections', courseId });
     setSelectedPlan(0);
   };
   const conflicts = data.courses
     .flatMap((left, leftIndex) => data.courses.slice(leftIndex + 1).map((right) => analyzeCourseConflict(left.id, right.id, data.options)));
 
   return <main>
-    <header><div><p>ALBERT ENHANCER</p><h1>Schedule Lab</h1></div><div className="header-stat"><b>{schedules.length}</b><span>valid schedules</span></div></header>
+    <header><div><p>ALBERT ENHANCER</p><h1>Schedule Lab</h1></div><div className="header-stat"><b>{search === undefined ? '…' : `${search.count}${search.complete ? '' : '+'}`}</b><span>valid schedules</span></div></header>
+    {saveError !== undefined && <p role="alert">{saveError}</p>}
+    {data.courses.length > 0 && <p className="change">Semester: {data.term ?? 'Unknown (legacy data). Export or remove these courses before importing a known semester.'}</p>}
+    {search !== undefined && !search.complete && <p role="status" className="change">Search limit reached. Showing the best plans found so far; more plans may exist and the global best is not guaranteed. Narrow your section choices to complete the search.</p>}
     {data.courses.length === 0 ? <section className="empty"><h2>No courses yet</h2><p>Open a supported course page in Albert and choose “Add to Schedule Lab.”</p></section> : <>
       <div className="workspace">
         <aside className="courses panel">
@@ -133,27 +128,31 @@ function App(): React.JSX.Element {
             const courseOptions = data.options.filter((option) => option.courseId === course.id);
             const components = componentsForOptions(courseOptions);
             const isMultiComponent = courseOptions.some((option) => option.sectionIds.length > 1);
+            const hasComponentAlternatives = components.some((component) => components.filter((item) => item.componentType === component.componentType).length > 1);
+            const hasSectionChoices = [intent.preferredSectionIds, intent.requiredSectionIds, intent.excludedSectionIds].some((ids) => (ids?.length ?? 0) > 0);
             const compatibleComponents = components.filter((component) => (intent.excludedSectionIds ?? []).includes(component.sectionId) || courseOptions.some((option) => option.sectionIds.includes(component.sectionId)
               && (intent.requiredSectionIds ?? []).every((id) => option.sectionIds.includes(id))
               && option.sectionIds.every((id) => !(intent.excludedSectionIds ?? []).includes(id))));
             return <article className="course" key={course.id}>
               <div className="course-title"><div><b>{course.code}</b><span>{course.title}</span></div><button type="button" className="remove-course" aria-label={`Remove ${course.code}`} title={`Remove ${course.code} from Schedule Lab`} onClick={() => removeCourse(course.id)}>Remove</button></div>
-              <label><input type="checkbox" checked={intent.required} onChange={(event) => persist({ ...data, intents: data.intents.map((item) => item.courseId === course.id ? { ...item, required: event.target.checked } : item) })} /> Required</label>
-              {isMultiComponent ? <><div className="component-default"><span>Any compatible component by default</span><button className="tiny" onClick={() => resetIntentSections(course.id)}>Reset choices</button></div><div className="component-groups">{[...new Set(compatibleComponents.map((component) => component.componentType))].map((type) => <section className="component-group" key={type}>
+              <label><input type="checkbox" checked={intent.required} onChange={(event) => persist({ type: 'required', courseId: course.id, required: event.target.checked })} /> Required</label>
+              {isMultiComponent ? <>{(hasComponentAlternatives || hasSectionChoices) && <div className="component-default"><span>Any compatible component by default</span><button className="tiny" onClick={() => resetIntentSections(course.id)}>Reset choices</button></div>}<div className="component-groups">{[...new Set(compatibleComponents.map((component) => component.componentType))].map((type) => <section className="component-group" key={type}>
                 <h3>{componentLabels[type]}</h3>
                 {compatibleComponents.filter((component) => component.componentType === type).map((component) => {
                   const preferred = intent.preferredSectionIds?.includes(component.sectionId) ?? false;
                   const required = intent.requiredSectionIds?.includes(component.sectionId) ?? false;
                   const excluded = intent.excludedSectionIds?.includes(component.sectionId) ?? false;
+                  // Count imported sections before intent filtering so narrowing choices never hides their controls.
+                  const hasAlternatives = components.filter((item) => item.componentType === type).length > 1;
                   return <div className={`component-row ${required ? 'required' : ''} ${excluded ? 'excluded' : ''}`} key={component.sectionId}>
                     <b>{plannerComponentLabel(component)}</b>
                     <span>{component.instructors?.map((instructor) => instructor.name).join(', ') || 'Instructor TBA'}</span>
                     <small>{componentTime(component)}</small>
-                    <div className="row-actions">
-                      <button className={preferred ? 'tiny active' : 'tiny'} onClick={() => toggleIntentSection(course.id, 'preferredSectionIds', component.sectionId)}>{preferred ? 'Unprefer' : 'Prefer'}</button>
-                      <button className={required ? 'tiny active' : 'tiny'} onClick={() => toggleIntentSection(course.id, 'requiredSectionIds', component.sectionId)}>{required ? 'Any' : 'Require'}</button>
-                      <button className={excluded ? 'tiny active danger' : 'tiny'} onClick={() => toggleIntentSection(course.id, 'excludedSectionIds', component.sectionId)}>{excluded ? 'Include' : 'Exclude'}</button>
-                    </div>
+                    {(hasAlternatives || preferred || required || excluded) && <div className="row-actions">
+                      {(hasAlternatives || preferred) && <button className={preferred ? 'tiny active' : 'tiny'} onClick={() => toggleIntentSection(course.id, 'preferredSectionIds', component.sectionId)}>{preferred ? 'Unprefer' : 'Prefer'}</button>}
+                      {(hasAlternatives || required) && <button className={required ? 'tiny active' : 'tiny'} onClick={() => toggleIntentSection(course.id, 'requiredSectionIds', component.sectionId)}>{required ? 'Any' : 'Require'}</button>}
+                      {(hasAlternatives || excluded) && <button className={excluded ? 'tiny active danger' : 'tiny'} onClick={() => toggleIntentSection(course.id, 'excludedSectionIds', component.sectionId)}>{excluded ? 'Include' : 'Exclude'}</button>}
+                    </div>}
                   </div>;
                 })}
               </section>)}</div></> : courseOptions.map((option) => {
@@ -180,10 +179,10 @@ function App(): React.JSX.Element {
         </aside>
 
         <section className="calendar panel">
-          <div className="panel-heading"><div><small className="panel-label">CURRENT CANDIDATE</small><h2>{current === undefined ? 'No feasible schedule' : `Plan ${String.fromCharCode(65 + Math.min(selectedPlan, 25))}`}</h2></div></div>
-          {current === undefined ? <div className="zero"><b>0 results</b><p>Undo the last registration change, unlock a section, or make a course optional.</p></div> : <div className="calendar-grid" style={{ '--calendar-hours': calendarSpan / 60 } as React.CSSProperties}>
+          <div className="panel-heading"><div><small className="panel-label">CURRENT CANDIDATE</small><h2>{current === undefined ? (search === undefined ? 'Searching…' : search.complete ? 'No feasible schedule' : 'No plan found within search limit') : `Plan ${String.fromCharCode(65 + Math.min(selectedPlan, 25))}`}</h2></div></div>
+          {current === undefined ? <div className="zero"><b>{search === undefined ? 'Searching…' : '0 results'}</b><p>Undo the last registration change, unlock a section, or make a course optional.</p></div> : <div className="calendar-grid" style={{ '--calendar-hours': calendarSpan / 60, '--calendar-days': 5 + Number(candidateMeetings.some((meeting) => meeting.day === 'saturday')) + Number(candidateMeetings.some((meeting) => meeting.day === 'sunday')) } as React.CSSProperties}>
             <div className="time-axis"><b aria-hidden="true">Time</b><div className="day-track">{hourMarks.map((minute) => <span className="time-label" key={minute} style={{ top: `${(minute - bounds.startMinute) / calendarSpan * 100}%` }}>{time(minute)}</span>)}</div></div>
-            {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const).map((day) => <div className="day" key={day}><b>{shortDays[day]}</b><div className="day-track">{current.options.flatMap((option) => optionMeetingEntries(option).filter(({ meeting }) => meeting.day === day).map(({ meeting, component }, meetingIndex) => {
+            {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).filter((day) => !['saturday', 'sunday'].includes(day) || candidateMeetings.some((meeting) => meeting.day === day)).map((day) => <div className="day" key={day}><b>{shortDays[day]}</b><div className="day-track">{current.options.flatMap((option) => optionMeetingEntries(option).filter(({ meeting }) => meeting.day === day).map(({ meeting, component }, meetingIndex) => {
               const placement = calendarPlacement(meeting, bounds);
               const color = courseColors.get(option.courseId);
               return <div
@@ -209,15 +208,15 @@ function App(): React.JSX.Element {
           <div className="panel-heading"><h2 className="panel-label">RANKING</h2></div>
           {schedules.slice(0, 8).map((schedule, index) => <button className={`plan ${current?.id === schedule.id ? 'selected' : ''}`} key={schedule.id || 'empty'} onClick={() => setSelectedPlan(index)}><span>Plan {String.fromCharCode(65 + index)}</span><b>{schedule.score.totalScore}</b><small>robustness {schedule.score.robustnessScore}</small></button>)}
           <div className="preference"><h3>Preferences</h3>
-            <label><input type="checkbox" checked={data.preferences.avoidBeforeMinute !== undefined} onChange={(event) => persist({ ...data, preferences: event.target.checked ? { ...data.preferences, avoidBeforeMinute: 600 } : withoutEarlyPreference(data.preferences) })} /> Avoid classes before 10:00</label>
-            <label><input type="checkbox" checked={data.preferences.avoidFriday} onChange={(event) => persist({ ...data, preferences: { ...data.preferences, avoidFriday: event.target.checked } })} /> Avoid Friday</label>
+            <label><input type="checkbox" checked={data.preferences.avoidBeforeMinute !== undefined} onChange={(event) => persist({ type: 'avoid-early', value: event.target.checked })} /> Avoid classes before 10:00</label>
+            <label><input type="checkbox" checked={data.preferences.avoidFriday} onChange={(event) => persist({ type: 'avoid-friday', value: event.target.checked })} /> Avoid Friday</label>
           </div>
         </aside>
       </div>
 
       <section className="registration panel">
-        <div className="panel-heading"><div><small>REGISTRATION SIMULATOR</small><h2>Update section outcomes</h2></div><div className="row-actions"><button className="secondary" disabled={data.registration.past.length === 0} onClick={() => { persist({ ...data, registration: undo(data.registration) }); setSelectedPlan(0); setLastChange('Last change undone'); }}>Undo</button><button className="secondary" onClick={() => registrationEvent({ type: 'reset' }, 'Registration state reset')}>Reset</button></div></div>
-        {lastChange !== undefined && <p className="change">{lastChange} → {schedules.length} possibilities now</p>}
+        <div className="panel-heading"><div><small>REGISTRATION SIMULATOR</small><h2>Update section outcomes</h2></div><div className="row-actions"><button className="secondary" disabled={data.registration.past.length === 0} onClick={() => { persist({ type: 'undo' }); setSelectedPlan(0); setLastChange('Last change undone'); }}>Undo</button><button className="secondary" onClick={() => registrationEvent({ type: 'reset' }, 'Registration state reset')}>Reset</button></div></div>
+        {lastChange !== undefined && <p className="change">{lastChange} → {search === undefined ? '…' : `${search.count}${search.complete ? '' : '+'}`} possibilities now</p>}
         <div className="simulation-options">{data.courses.flatMap((course) => {
           const options = data.options.filter((option) => option.courseId === course.id);
           if (!options.some((option) => option.sectionIds.length > 1)) return options.map((option) => <div key={option.id}><b>{option.id}</b><div><button onClick={() => registrationEvent({ type: 'got-it', optionId: option.id }, `${option.id} Got it`)}>Got it</button><button onClick={() => registrationEvent({ type: 'full', optionId: option.id }, `${option.id} Full`)}>Full</button><button onClick={() => registrationEvent({ type: 'waitlisted', optionId: option.id }, `${option.id} Waitlisted`)}>Waitlisted</button></div></div>);

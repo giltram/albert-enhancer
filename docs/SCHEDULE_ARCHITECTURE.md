@@ -16,7 +16,7 @@ Schedule Solver
 ScheduleCandidate[]
 ```
 
-This pipeline is connected to Albert search imports. `sectionGroups.ts` reads the current course/term's ordered primary + REC/LAB blocks and produces explicit component requirements and compatibility rules. `sectionPicker.ts` retains user-selected alternatives (one per required type in a final schedule); `plannerImport.ts` builds complete options and persists one merged update through `mergeEnrollmentOptions`. Single-component imports retain legacy option IDs. Re-adding a group replaces its legacy standalone imports without removing other primary-section bundles.
+This pipeline is connected to Albert search imports. `sectionGroups.ts` reads the current course/term's ordered primary + REC/LAB blocks and produces explicit component requirements and compatibility rules. `sectionPicker.ts` retains user-selected alternatives (one per required type in a final schedule); `plannerImport.ts` builds complete options and sends a mutation to the single background writer, which applies `mergeEnrollmentOptions` to the latest stored value. Single-component imports retain legacy option IDs. Re-adding a group replaces its legacy standalone imports without removing other primary-section bundles.
 
 The observed Albert layout and limits are documented in the [Albert README](../src/adapters/albert/README.md). Classification uses `Component:`, never position alone, instructor, or native button presence. The adapter's ordered-block convention is not a universal catalog linkage rule. Filters that could hide components block import until cleared. Unknown/unreadable linked rows do not permit incomplete imports. A new layout or explicit multi-level linkage must be normalized in the adapter before invoking the builder.
 
@@ -35,4 +35,13 @@ Compatibility rules are exhaustive for the component types they link. A multi-co
 
 Component requirements/preferences and component registration outcomes filter or rank generated options. They do not replace exact EnrollmentOption lock/exclude state: requiring `LEC001` keeps every legal option containing that lecture, while locking `LEC001 + REC012` selects that exact bundle.
 
+In Schedule Lab's multi-component course list, Prefer / Require / Exclude are shown only for component types with multiple distinct imported sections, counted before intent filtering. A sole lecture or recitation still shows its label, instructor, and meeting times; existing section choices retain their individual undo buttons and Reset choices. Course-level Required / Remove and exact enrollment option controls remain available.
+
 Planner schema v2 adds optional component display metadata and section-level registration state. The migration preserves legacy option IDs and accepts older single-section options without component metadata.
+
+
+## Persistence and bounded previews
+
+A planner holds exactly one semester. Optional schema-v2 `term` normalizes legacy data to null without changing IDs, courses, or history. Imports require an explicit source term and reject mismatched or unidentified nonempty plans. IDs are unique within that term-scoped planner. Export and remove existing courses before starting another term; the empty plan can bind to a new term. Missing or unknown component labels reject a group instead of ending it.
+
+`eligibility.ts` owns option eligibility for both solver and robustness: allowed option IDs, exact locks, section requirements/exclusions, and outcomes. The exhaustive `solveSchedules` API remains for tests/small inputs. Production uses `rankedScheduleSearch`: at most 2,000 candidates or 20,000 search steps, incremental scoring, eight retained plans, and explicit `complete` status. `features/planner/scheduleSearch.ts` cooperatively yields about every 8 ms and aborts superseded work. Both Schedule Lab and content previews use it; content computes once per stored snapshot and passes the result into the adapter. Search limits are disclosed, never presented as global optimality or a proof of infeasibility. These are cooperative slices, not hard real-time guarantees or a worker.

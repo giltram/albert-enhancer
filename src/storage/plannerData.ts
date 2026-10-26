@@ -6,6 +6,8 @@ import { defaultSchedulePreferences } from '../core/schedule';
 
 export interface PlannerData {
   readonly schemaVersion: 2;
+  /** One term per planner. null means legacy/unidentified offerings; never infer. */
+  readonly term?: string | null;
   readonly courses: readonly Course[];
   readonly options: readonly EnrollmentOption[];
   readonly intents: readonly CourseIntent[];
@@ -29,8 +31,12 @@ export function mergeEnrollmentOptions(
   primarySectionId: string,
   groupSectionIds: readonly string[],
   options: readonly EnrollmentOption[],
+  term?: string,
 ): PlannerData {
   if (options.length === 0) return value;
+  if (term !== undefined && value.options.length > 0 && value.term !== term) {
+    throw new Error(`This plan belongs to ${value.term ?? 'an unknown semester (legacy data)'}. Export it if needed, then remove its courses before importing ${term}.`);
+  }
   const groupIds = new Set(groupSectionIds);
   const removed = value.options.filter((option) => option.courseId === course.id
     && (option.sectionIds.includes(primarySectionId)
@@ -44,7 +50,10 @@ export function mergeEnrollmentOptions(
   const cleanIds = (ids: readonly string[] | undefined): readonly string[] => (ids ?? []).filter((id) => !staleSectionIds.has(id));
   return {
     ...value,
-    courses: [...value.courses.filter((existing) => existing.id !== course.id), course],
+    ...(term === undefined ? {} : { term }),
+    courses: value.courses.some((existing) => existing.id === course.id)
+      ? value.courses.map((existing) => existing.id === course.id ? course : existing)
+      : [...value.courses, course],
     options: nextOptions,
     intents: value.intents.some((intent) => intent.courseId === course.id)
       ? value.intents.map((intent) => intent.courseId !== course.id ? intent : {
@@ -97,6 +106,7 @@ export function normalizePlannerData(value: PlannerData): PlannerData {
     ...emptyPlannerData,
     ...value,
     schemaVersion: 2,
+    term: value.term ?? null,
     intents: (value.intents ?? []).map((intent) => ({
       ...intent,
       requiredSectionIds: intent.requiredSectionIds ?? [],

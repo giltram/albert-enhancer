@@ -1,6 +1,7 @@
 import type { EnrollmentOption } from '../../core/courses';
 import { classifyCourse } from '../../core/curriculum';
-import { optionsConflict, rankSchedules, solveSchedules } from '../../core/schedule';
+import { optionsConflict } from '../../core/schedule';
+import type { ScheduleSearchResult } from '../../core/schedule';
 import { nyushComputerScience, nyushEconomics } from '../../curricula/nyush';
 import { expandAbbreviations, resolveAbbreviationQuery } from '../../features/abbreviations';
 import { buildHighlights } from '../../features/highlighting';
@@ -15,7 +16,25 @@ import { ALBERT_SELECTORS } from './selectors';
 import { applyTermPreference } from './termAdapter';
 import { ensureHomeToolbar } from './homeToolbar';
 
-let latestSettings: AlbertEnhancerSettings | undefined;
+interface EnhancementContext {
+  settings: AlbertEnhancerSettings;
+  readonly controller: AbortController;
+  readonly searchElements: Set<HTMLElement>;
+}
+const contexts = new WeakMap<ParentNode, EnhancementContext>();
+
+export function disposeAlbertPage(root: ParentNode): void {
+  const context = contexts.get(root);
+  context?.controller.abort();
+  for (const element of context?.searchElements ?? []) delete element.dataset.aeAbbreviationSearch;
+  contexts.delete(root);
+  for (const panel of root.querySelectorAll('[data-ae-enhancement]')) panel.remove();
+  for (const title of root.querySelectorAll<HTMLElement>('[data-ae-original-text]')) {
+    title.textContent = title.dataset.aeOriginalText ?? '';
+    delete title.dataset.aeOriginalText;
+  }
+  applyTermPreference(root, '');
+}
 
 function highlightNode(kind: string, label: string, value: string, priority: string): HTMLElement {
   const item = document.createElement('div');
@@ -29,20 +48,17 @@ function highlightNode(kind: string, label: string, value: string, priority: str
   return item;
 }
 
-function conflictsForCourse(parsedOption: EnrollmentOption, planner?: PlannerData) {
-  if (planner === undefined) return [];
-  const problem = { intents: planner.intents, options: planner.options, registration: planner.registration.present };
-  const current = rankSchedules(solveSchedules(problem), planner.preferences, problem)[0];
-  if (current === undefined) return [];
-  return current.options.flatMap((option) => {
-    if (!optionsConflict(parsedOption, option)) return [];
+function conflictsForCourse(parsedOption: EnrollmentOption, planner: PlannerData | undefined, preview: ScheduleSearchResult | undefined) {
+  if (planner === undefined || preview === undefined) return [];
+  return (preview.schedules[0]?.options ?? []).flatMap((option) => {
+    if (option.courseId === parsedOption.courseId || !optionsConflict(parsedOption, option)) return [];
     const courseCode = planner.courses.find((course) => course.id === option.courseId)?.code ?? option.courseId;
     const meeting = option.meetings.find((otherMeeting) => parsedOption.meetings.some((meeting) => meeting.day === otherMeeting.day && meeting.startMinute < otherMeeting.endMinute && otherMeeting.startMinute < meeting.endMinute));
     return meeting === undefined ? [] : [{ courseCode, meeting }];
   });
 }
 
-function enhanceCourse(root: Element, settings: AlbertEnhancerSettings, planner?: PlannerData): void {
+function enhanceCourse(root: Element, settings: AlbertEnhancerSettings, planner: PlannerData | undefined, preview: ScheduleSearchResult | undefined): void {
   if (root.querySelector(':scope > [data-ae-enhancement]') !== null) return;
   const parsed = parseCourse(root);
   if (parsed === undefined) return;
@@ -81,8 +97,12 @@ function enhanceCourse(root: Element, settings: AlbertEnhancerSettings, planner?
     ...parsed.information,
     classifications: classifyCourse(parsed.course.code.toLocaleUpperCase('en-US'), [nyushComputerScience, nyushEconomics]),
   };
-  for (const highlight of buildHighlights(information, settings.highlights, conflictsForCourse(option, planner))) {
-    panel.append(highlightNode(highlight.kind, highlight.label, highlight.value, highlight.priority));
+  for (const highlight of buildHighlights(information, settings.highlights, settings.highlights.conflicts && parsed.term === planner?.term ? conflictsForCourse(option, planner, preview) : [])) {
+    const node = highlightNode(highlight.kind, highlight.label, highlight.value, highlight.priority);
+    if (highlight.kind === 'conflict' && preview?.complete === false) {
+      node.title = 'Conflict with a preview plan. Search is incomplete; other plans may avoid it.';
+    }
+    panel.append(node);
   }
 
   const actions = document.createElement('div');
@@ -91,7 +111,7 @@ function enhanceCourse(root: Element, settings: AlbertEnhancerSettings, planner?
     const group = readSectionGroup(root);
     const auxiliaryIds = group?.choices.flatMap((choice) => choice.sections.map((child) => child.section.id)) ?? [];
     const expected = group === undefined ? [] : optionsForSectionGroup(group, auxiliaryIds);
-    const alreadyAdded = expected.some((option) => planner?.options.some((existing) => existing.id === option.id));
+    const alreadyAdded = parsed.term !== undefined && parsed.term === planner?.term && expected.some((option) => planner?.options.some((existing) => existing.id === option.id));
     const add = document.createElement('button');
     add.type = 'button';
     add.textContent = alreadyAdded ? 'Added' : 'Add to Schedule Lab';
@@ -162,8 +182,7 @@ function ensureSearchResultScrollRoom(root: ParentNode): void {
   results.append(spacer);
 }
 
-function resolveSearchInput(input: HTMLInputElement): void {
-  const settings = latestSettings;
+function resolveSearchInput(input: HTMLInputElement, settings: AlbertEnhancerSettings): void {
   if (settings === undefined || !settings.enabled || !settings.abbreviationExpansion) return;
   const resolved = resolveAbbreviationQuery(input.value, settings.customAbbreviations);
   if (resolved === input.value) return;
@@ -178,42 +197,49 @@ function searchEventForInput(input: HTMLInputElement): string | undefined {
   return undefined;
 }
 
-function ensureAbbreviationSearch(root: ParentNode): void {
+function ensureAbbreviationSearch(root: ParentNode, context: EnhancementContext): void {
   const queries = [...root.querySelectorAll<HTMLInputElement>(ALBERT_SELECTORS.courseSearchQuery)];
   for (const input of queries) {
     if (input.dataset.aeAbbreviationSearch === 'true') continue;
     input.dataset.aeAbbreviationSearch = 'true';
+    context.searchElements.add(input);
     input.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' || event.isComposing) return;
+      if (!context.settings.enabled || event.key !== 'Enter' || event.isComposing) return;
       const searchEvent = searchEventForInput(input);
       if (searchEvent === undefined) return;
       event.preventDefault();
       event.stopPropagation();
-      resolveSearchInput(input);
+      resolveSearchInput(input, context.settings);
       input.ownerDocument.dispatchEvent(new Event(searchEvent));
-    }, true);
+    }, { capture: true, signal: context.controller.signal });
   }
   for (const submit of root.querySelectorAll<HTMLElement>(ALBERT_SELECTORS.courseSearchSubmit)) {
     if (submit.dataset.aeAbbreviationSearch === 'true') continue;
     submit.dataset.aeAbbreviationSearch = 'true';
+    context.searchElements.add(submit);
     submit.addEventListener('click', () => {
       const inputId = submit.id === 'BUTTON_SMALL'
         ? 'NYU_CLS_DERIVED_DESCR100'
         : submit.id === 'SMALL_BUTTON' ? 'NYU_CLS_DERIVED_DESCR100_JOB_POST1' : undefined;
       if (inputId !== undefined) {
         const input = root.querySelector<HTMLInputElement>(`#${inputId}`);
-        if (input !== null) resolveSearchInput(input);
+        if (input !== null) resolveSearchInput(input, context.settings);
         return;
       }
       const container = submit.closest('[data-ae-search]') ?? root;
-      for (const input of container.querySelectorAll<HTMLInputElement>(ALBERT_SELECTORS.courseSearchQuery)) resolveSearchInput(input);
-    }, true);
+      for (const input of container.querySelectorAll<HTMLInputElement>(ALBERT_SELECTORS.courseSearchQuery)) resolveSearchInput(input, context.settings);
+    }, { capture: true, signal: context.controller.signal });
   }
 }
 
-export function enhanceAlbertPage(root: ParentNode, settings: AlbertEnhancerSettings, planner?: PlannerData): void {
-  latestSettings = settings;
-  if (!settings.enabled) return;
+export function enhanceAlbertPage(root: ParentNode, settings: AlbertEnhancerSettings, planner?: PlannerData, preview?: ScheduleSearchResult): void {
+  if (!settings.enabled) { disposeAlbertPage(root); return; }
+  let context = contexts.get(root);
+  if (context === undefined) {
+    context = { settings, controller: new AbortController(), searchElements: new Set() };
+    contexts.set(root, context);
+  }
+  context.settings = settings;
   ensureHomeToolbar(root, {
     openScheduleLab: () => { void browser.runtime.sendMessage({ type: 'open-schedule-lab' }); },
     openDegreePlanner: () => { void browser.runtime.sendMessage({ type: 'open-degree-planner' }); },
@@ -221,8 +247,8 @@ export function enhanceAlbertPage(root: ParentNode, settings: AlbertEnhancerSett
   });
   applyTermPreference(root, settings.preferredTerm);
   applyCampusPreference(root, settings.campus);
-  ensureAbbreviationSearch(root);
+  ensureAbbreviationSearch(root, context);
   ensureCourseSearchToolbar(root, settings);
-  for (const courseRoot of root.querySelectorAll(ALBERT_SELECTORS.courseRoot)) enhanceCourse(courseRoot, settings, planner);
+  for (const courseRoot of root.querySelectorAll(ALBERT_SELECTORS.courseRoot)) enhanceCourse(courseRoot, settings, planner, preview);
   ensureSearchResultScrollRoom(root);
 }

@@ -25,7 +25,7 @@ The course-data Provider is still not connected to an entrypoint and decodes alr
 ## Terms
 
 - **Section** — one real catalog/Albert component, such as `LEC001`, `REC011`, or `LAB003`.
-- **Component** — the role a section plays: lecture, recitation, lab, seminar, workshop, discussion, or other.
+- **Component** — the role a section plays: lecture, recitation, lab, seminar, workshop, discussion, group-instruction, or other. Albert's `Grp Instr in the Perform Arts` maps to group-instruction and can serve as a primary section; it is displayed as `grp` in Schedule Lab.
 - **EnrollmentOption** — one complete legal way to enroll in one course, such as `LEC001 + REC011`. It is the solver's atomic choice.
 - **Schedule** — a complete timetable containing at most one EnrollmentOption for each selected course.
 

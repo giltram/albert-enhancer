@@ -35,6 +35,7 @@ describe('Schedule Lab calendar appearance', () => {
     expect(plannerComponentLabel({ sectionId: 'lec001', sectionCode: '001', componentType: 'lecture' })).toBe('lec 001');
     expect(plannerComponentLabel({ sectionId: 'rec011', sectionCode: '011', componentType: 'recitation' })).toBe('reci 011');
     expect(plannerComponentLabel({ sectionId: 'lab003', sectionCode: '003', componentType: 'lab' })).toBe('lab 003');
+    expect(plannerComponentLabel({ sectionId: 'music001', sectionCode: '001', componentType: 'group-instruction' })).toBe('grp 001');
   });
 
   it('preserves identifiers when component display metadata is missing', () => {

@@ -41,6 +41,18 @@ beforeEach(() => {
 afterEach(() => { contexts.splice(0).forEach((context) => context.notifyInvalidated()); vi.unstubAllGlobals(); });
 
 describe('content lifecycle with real Albert adapter', () => {
+  it('uses the full editable list for search without restoring deleted defaults', async () => {
+    mocks.settings.getValue.mockResolvedValue({ ...defaultSettings, abbreviations: [
+      { abbreviation: 'ALG', expansion: 'Custom algebra', enabled: true },
+      { abbreviation: 'WAI', expansion: 'Writing as Inquiry', enabled: false },
+    ] });
+    await start();
+    const input = document.querySelector('input')!;
+    input.value = 'ALG LA EAP WAI';
+    enter(input);
+    expect(input.value).toBe('Custom algebra LA EAP WAI');
+  });
+
   it('removes native search listeners on disable and uses new settings after reinjection', async () => {
     const custom = (expansion: string) => ({ ...defaultSettings, customAbbreviations: [{ abbreviation: 'XX', expansion, enabled: true }] });
     mocks.settings.getValue.mockResolvedValue(custom('Old phrase'));

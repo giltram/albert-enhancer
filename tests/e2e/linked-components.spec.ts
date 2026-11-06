@@ -18,6 +18,36 @@ test.beforeEach(async ({ extensionContext }) => {
   await background.evaluate(async () => { await chrome.storage.local.remove('planner'); });
 });
 
+test('Group Bamboo Flute saves and appears in Schedule Lab without a component picker', async ({ extensionContext, extensionId }) => {
+  const page = await extensionContext.newPage();
+  await page.route('https://sis.nyu.edu/group-bamboo-flute', (route) => route.fulfill({
+    contentType: 'text/html', body: readFileSync('tests/fixtures/albert/group-bamboo-flute.html', 'utf8'),
+  }));
+  await page.goto('https://sis.nyu.edu/group-bamboo-flute');
+  await page.getByRole('button', { name: 'Add to Schedule Lab' }).click();
+  await expect(page.getByRole('button', { name: 'Added' })).toBeDisabled();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const [worker] = extensionContext.serviceWorkers();
+  const stored = await worker!.evaluate(async () => (await chrome.storage.local.get('planner')).planner) as PlannerData;
+  expect(stored.term).toBe('spring 2027');
+  expect(stored.options).toHaveLength(1);
+  expect(stored.options[0]).toMatchObject({
+    id: 'MUS-SHU 151:001', sectionIds: ['MUS-SHU 151:001'],
+    components: [{ componentType: 'group-instruction', classNumber: '17684' }],
+    meetings: [{ day: 'tuesday', startMinute: 1035, endMinute: 1165 }],
+  });
+  const planner = await extensionContext.newPage();
+  await planner.goto(`chrome-extension://${extensionId}/planner.html`);
+  await expect(planner.locator('.header-stat b')).toHaveText('1');
+  const meeting = planner.locator('.meeting.component-group-instruction');
+  await expect(meeting).toHaveCount(1);
+  await expect(meeting).toContainText('Group Bamboo Flute: All Levels');
+  await expect(planner.locator('.possibility-grid .component-group-instruction b')).toHaveText('grp 001');
+  await expect(planner.locator('.candidate-components')).toContainText('Tue 17:15–19:25');
+  await page.close();
+  await planner.close();
+});
+
 test('both Machine Learning lectures automatically include their own recitation', async ({ extensionContext, extensionId }) => {
   const page = await extensionContext.newPage();
   await page.route('https://sis.nyu.edu/linked-machine-learning', (route) => route.fulfill({ contentType: 'text/html', body: springMachineLearningFixture() }));

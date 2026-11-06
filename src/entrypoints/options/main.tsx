@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import type { AlbertEnhancerSettings, CustomAbbreviation, HighlightSettings } from '../../features/settings';
 import { deleteAllLocalData, exportLocalData, settingsItem } from '../../storage/settings';
 import { campusOptionsItem } from '../../storage/campuses';
-import { builtInAbbreviations } from '../../features/abbreviations';
+import { getConfiguredAbbreviations } from '../../features/abbreviations';
 import './style.css';
 
 const [initialSettings, observedCampuses] = await Promise.all([settingsItem.getValue(), campusOptionsItem.getValue()]);
@@ -25,9 +25,10 @@ function downloadJson(contents: string): void {
 function App(): React.JSX.Element {
   const [settings, setSettings] = useState<AlbertEnhancerSettings>(initialSettings);
   const [saved, setSaved] = useState(false);
+  const abbreviations = getConfiguredAbbreviations(settings);
   const update = (next: AlbertEnhancerSettings): void => { setSaved(false); setSettings(next); };
-  const updateCustom = (index: number, next: CustomAbbreviation): void => {
-    update({ ...settings, customAbbreviations: settings.customAbbreviations.map((item, itemIndex) => itemIndex === index ? next : item) });
+  const updateAbbreviation = (index: number, next: CustomAbbreviation): void => {
+    update({ ...settings, abbreviations: abbreviations.map((item, itemIndex) => itemIndex === index ? next : item) });
   };
   const updateCampusValue = (value: string): void => {
     update({
@@ -53,17 +54,16 @@ function App(): React.JSX.Element {
       <small>Enter the semester tab label shown above your Albert shopping cart, such as Spring 2027. It is selected once each time you open the page; you can still switch tabs afterward. Leave blank to turn this off. If the semester is unavailable, the current tab is preserved.</small>
     </section>
     <section>
-      <h2>Custom abbreviations</h2>
-      <p><strong>Built in:</strong> {Object.entries(builtInAbbreviations).map(([key, value]) => `${key} → ${value}`).join(' · ')}</p>
+      <h2>Abbreviations</h2>
       <label className="switch"><input type="checkbox" checked={settings.abbreviationExpansion} onChange={(event) => update({ ...settings, abbreviationExpansion: event.target.checked })} /> Abbreviation expansion</label>
-      {settings.customAbbreviations.map((item, index) => <div className="abbreviation-row" key={index}>
-        <input aria-label={`Abbreviation ${index + 1}`} value={item.abbreviation} placeholder="EAP" onChange={(event) => updateCustom(index, { ...item, abbreviation: event.target.value })} />
+      {abbreviations.map((item, index) => <div className="abbreviation-row" key={index}>
+        <input aria-label={`Abbreviation ${index + 1}`} value={item.abbreviation} placeholder="EAP" onChange={(event) => updateAbbreviation(index, { ...item, abbreviation: event.target.value })} />
         <span>→</span>
-        <input aria-label={`Expansion ${index + 1}`} value={item.expansion} placeholder="English for Academic Purposes" onChange={(event) => updateCustom(index, { ...item, expansion: event.target.value })} />
-        <label className="inline"><input type="checkbox" checked={item.enabled} onChange={(event) => updateCustom(index, { ...item, enabled: event.target.checked })} /> Enabled</label>
-        <button className="quiet" onClick={() => update({ ...settings, customAbbreviations: settings.customAbbreviations.filter((_, itemIndex) => itemIndex !== index) })}>Delete</button>
+        <input aria-label={`Expansion ${index + 1}`} value={item.expansion} placeholder="English for Academic Purposes" onChange={(event) => updateAbbreviation(index, { ...item, expansion: event.target.value })} />
+        <label className="inline"><input type="checkbox" checked={item.enabled} onChange={(event) => updateAbbreviation(index, { ...item, enabled: event.target.checked })} /> Enabled</label>
+        <button className="quiet" onClick={() => update({ ...settings, abbreviations: abbreviations.filter((_, itemIndex) => itemIndex !== index) })}>Delete</button>
       </div>)}
-      <button className="secondary" onClick={() => update({ ...settings, customAbbreviations: [...settings.customAbbreviations, { abbreviation: '', expansion: '', enabled: true }] })}>Add abbreviation</button>
+      <button className="secondary" onClick={() => update({ ...settings, abbreviations: [...abbreviations, { abbreviation: '', expansion: '', enabled: true }] })}>Add abbreviation</button>
     </section>
     <section>
       <h2>Session timeout helper</h2>
@@ -79,7 +79,7 @@ function App(): React.JSX.Element {
       <label className="switch"><input type="checkbox" checked={settings.experimentalStatusDetection} onChange={(event) => update({ ...settings, experimentalStatusDetection: event.target.checked })} /> Registration status detection (display only)</label>
     </section>
     <footer>
-      <button onClick={() => { void settingsItem.setValue({ ...settings, preferredTerm: settings.preferredTerm?.trim() ?? '' }).then(() => setSaved(true)); }}>{saved ? 'Saved' : 'Save settings'}</button>
+      <button onClick={() => { void settingsItem.setValue({ ...settings, abbreviations, preferredTerm: settings.preferredTerm?.trim() ?? '' }).then(() => setSaved(true)); }}>{saved ? 'Saved' : 'Save settings'}</button>
       <button className="secondary" onClick={() => { void exportLocalData().then(downloadJson); }}>Export local data</button>
       <button className="danger" onClick={() => { if (confirm('Delete all Albert Enhancer local data?')) void deleteAllLocalData().then(() => location.reload()); }}>Delete all local data</button>
     </footer>

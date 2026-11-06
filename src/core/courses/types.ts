@@ -9,6 +9,7 @@ export type SectionComponentType =
   | 'seminar'
   | 'workshop'
   | 'discussion'
+  | 'group-instruction'
   | 'other';
 
 export interface Course {

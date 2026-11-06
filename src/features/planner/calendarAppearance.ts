@@ -33,6 +33,7 @@ export function calendarCourseColors(courseIds: readonly string[]): ReadonlyMap<
 export function plannerComponentLabel(component: EnrollmentComponent): string {
   if (component.sectionCode === undefined) return component.sectionId;
   if (component.componentType === 'other') return component.sectionCode;
+  if (component.componentType === 'group-instruction') return `grp ${component.sectionCode}`;
   const abbreviation = component.componentType === 'recitation' ? 'reci' : component.componentType.slice(0, 3);
   return `${abbreviation} ${component.sectionCode}`;
 }

@@ -22,7 +22,7 @@ export interface NYUDataTransport {
 }
 
 const weekdays = new Set<Weekday>(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
-const componentTypes = new Set<SectionComponentType>(['lecture', 'recitation', 'lab', 'seminar', 'workshop', 'discussion', 'other']);
+const componentTypes = new Set<SectionComponentType>(['lecture', 'recitation', 'lab', 'seminar', 'workshop', 'discussion', 'group-instruction', 'other']);
 function isStringArray(value: unknown): value is readonly string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }

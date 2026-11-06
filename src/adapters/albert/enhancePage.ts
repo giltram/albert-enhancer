@@ -3,7 +3,7 @@ import { classifyCourse } from '../../core/curriculum';
 import { optionsConflict } from '../../core/schedule';
 import type { ScheduleSearchResult } from '../../core/schedule';
 import { nyushComputerScience, nyushEconomics } from '../../curricula/nyush';
-import { expandAbbreviations, resolveAbbreviationQuery } from '../../features/abbreviations';
+import { expandAbbreviations, getConfiguredAbbreviations, resolveAbbreviationQuery } from '../../features/abbreviations';
 import { buildHighlights } from '../../features/highlighting';
 import type { AlbertEnhancerSettings } from '../../features/settings';
 import type { PlannerData } from '../../storage/planner';
@@ -69,10 +69,10 @@ function enhanceCourse(root: Element, settings: AlbertEnhancerSettings, planner:
     const original = title.dataset.aeOriginalText ?? title.textContent;
     title.dataset.aeOriginalText = original;
     if (!settings.abbreviationExpansion) title.textContent = original;
-    else if (publicTitle !== null) title.textContent = expandAbbreviations(original, settings.customAbbreviations);
+    else if (publicTitle !== null) title.textContent = expandAbbreviations(original, getConfiguredAbbreviations(settings));
     else {
       const originalTitle = original.replace(/\s+/g, ' ').trim().replace(new RegExp(`^${parsed.course.code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+`, 'i'), '');
-      title.textContent = `${parsed.course.code} ${expandAbbreviations(originalTitle, settings.customAbbreviations)}`;
+      title.textContent = `${parsed.course.code} ${expandAbbreviations(originalTitle, getConfiguredAbbreviations(settings))}`;
     }
   }
 
@@ -184,7 +184,7 @@ function ensureSearchResultScrollRoom(root: ParentNode): void {
 
 function resolveSearchInput(input: HTMLInputElement, settings: AlbertEnhancerSettings): void {
   if (settings === undefined || !settings.enabled || !settings.abbreviationExpansion) return;
-  const resolved = resolveAbbreviationQuery(input.value, settings.customAbbreviations);
+  const resolved = resolveAbbreviationQuery(input.value, getConfiguredAbbreviations(settings));
   if (resolved === input.value) return;
   input.value = resolved;
   input.dispatchEvent(new Event('input', { bubbles: true }));

@@ -24,6 +24,7 @@ export function normalizeComponentType(value: string | undefined): SectionCompon
   if (/\bseminar\b/.test(normalized)) return 'seminar';
   if (/\bworkshop\b/.test(normalized)) return 'workshop';
   if (/\bdiscussion\b/.test(normalized)) return 'discussion';
+  if (/^grp instr in the perform arts\b/.test(normalized)) return 'group-instruction';
   return 'other';
 }
 

@@ -36,14 +36,14 @@ describe('course data providers', () => {
     expect((await provider.getEnrollmentOptions('c')).map((option) => option.id)).toEqual(['tba']);
   });
 
-  it('preserves valid normalized component metadata', async () => {
+  it.each(['lecture', 'group-instruction'])('preserves valid normalized %s component metadata', async (componentType) => {
     const payload = { id: 'cs', code: 'CSCI 101', title: 'Programming', options: [{
       id: 'cs::lec1+rec1', sectionIds: ['lec1', 'rec1'], instructors: [], meetings: [],
-      components: [{ sectionId: 'lec1', componentType: 'lecture', sectionCode: '001' }, { sectionId: 'rec1', componentType: 'recitation', sectionCode: '011' }],
+      components: [{ sectionId: 'lec1', componentType, sectionCode: '001' }, { sectionId: 'rec1', componentType: 'recitation', sectionCode: '011' }],
     }] };
     const provider = new NYUCourseDataProvider({ search: async () => [], course: async () => payload });
     await expect(provider.getEnrollmentOptions('cs')).resolves.toMatchObject([{
-      components: [{ sectionId: 'lec1', componentType: 'lecture' }, { sectionId: 'rec1', componentType: 'recitation' }],
+      components: [{ sectionId: 'lec1', componentType }, { sectionId: 'rec1', componentType: 'recitation' }],
     }]);
   });
 });

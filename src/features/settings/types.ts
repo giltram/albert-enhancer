@@ -28,6 +28,9 @@ export interface AlbertEnhancerSettings {
   readonly preferredTerm?: string;
   readonly abbreviationExpansion: boolean;
   readonly keepSessionAlive: boolean;
+  /** Complete editable list; an empty list disables all abbreviations. Absent in legacy settings. */
+  readonly abbreviations?: readonly CustomAbbreviation[];
+  /** Legacy overrides, used only when abbreviations is absent. */
   readonly customAbbreviations: readonly CustomAbbreviation[];
   readonly highlights: HighlightSettings;
   readonly experimentalStatusDetection: boolean;

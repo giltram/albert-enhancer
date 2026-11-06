@@ -50,6 +50,7 @@
 - 原生学期入口及三个函数的调用顺序于 2026-10-19 在真实 Albert 页核对；`tests/fixtures/albert/semester-tabs.html` 保留同名 API，不能再用虚构的 `selectSemester` 代替宿主契约。内置浏览器回放见 `tests/browser/README.md`。
 - `keepSessionAlive` 默认关闭；URL 只接受 NYU HTTPS 主机和 `cmd=resettimeout`，不执行页面提供的 `javascript:` 字符串。
 - 组件按 `Component:` 分类。在 `SELECT_CLASS` 学期列表内，一个主课后直到下一个已识别主课组件之前的辅课属于该主课。不能跨课程/学期，也不能根据“不是第一行”、老师、教室、按钮缺失来分类。
+- `Grp Instr in the Perform Arts` 映射为 `group-instruction` 主课组件，Schedule Lab 缩写为 `grp`。此标签于 2026-11-05 在 Spring 2027 的 MUS-SHU 151（Group Bamboo Flute: All Levels，班号 17684）核对；最小页面回放见 `tests/fixtures/albert/group-bamboo-flute.html`。仍拒绝缺失或未知组件，不将其默认为 lecture。
 - 这一有序块约定已在 Spring 2027 上海校区的 CSCI-SHU 360、CSCI-SHU 11 页面核对；后者原生 Related Sections 页面也列出相同六个必选 lab。它不是全校通用的关联 API。不同布局或显式 recitation → lab 特定关联需新增 adapter 数据来源，不能默认笛卡尔组合。
 - `readSectionGroup` 遇到不可解析、Component 缺失或未知的子行时拒绝整个导入；可能隐藏组件的筛选器要求先清除。无主课的 recitation/lab 不可单独导入。
 - 每种组件只有一项时自动带入；某种有多项时打开 dialog，默认保留全部，允许一项/多项/全选，每种至少一项。每组的 `Select all` 在全部选中时取消该组全部选择，否则选中全部；全不选时禁止提交。文案明确允许暂时保留与其他课程冲突的时段，稍后在 Schedule Lab 解决冲突并决定最终选择。

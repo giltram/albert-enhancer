@@ -15,7 +15,7 @@ import './style.css';
 
 const initialData = normalizePlannerData(await plannerItem.getValue());
 const shortDays: Record<Weekday, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
-const componentLabels: Record<SectionComponentType, string> = { lecture: 'Lecture', recitation: 'Recitation', lab: 'Lab', seminar: 'Seminar', workshop: 'Workshop', discussion: 'Discussion', other: 'Section' };
+const componentLabels: Record<SectionComponentType, string> = { lecture: 'Lecture', recitation: 'Recitation', lab: 'Lab', seminar: 'Seminar', workshop: 'Workshop', discussion: 'Discussion', 'group-instruction': 'Group instruction', other: 'Section' };
 
 function time(minute: number): string {
   return `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;

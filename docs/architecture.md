@@ -137,6 +137,7 @@ flowchart LR
 关键契约：
 
 - `Section` 是真实课程组件；`EnrollmentOption` 是一门课的一套完整可选组合，包含 `sectionIds`、合并后的会议和可选展示元数据。
+- Albert 的 `Grp Instr in the Perform Arts` 明确映射为 `group-instruction` 主课组件，Schedule Lab 显示为 `grp`；该类型经过与其他主课相同的分组、builder、后台存储和排课流程。缺失或未知组件仍拒绝导入。真实 MUS-SHU 151 样本和验证位置见 [Albert README](../src/adapters/albert/README.md)。
 - builder 对未知多组件兼容关系返回空集合。Albert adapter 根据已核对的按主课排列的 section 块构造显式关联规则：必须读取 `Component:`，同课程同学期内只收集主课后、下一已识别主课前的 recitation/lab。未知或缺失组件元数据使整个分组导入失败。筛选器可能隐藏组件时要求先清除；不能按老师、上课时间或是否有 Select Class 按钮判断类型。此布局约定及来源限制见 [Albert README](../src/adapters/albert/README.md)。
 - 一个辅课自动随主课加入；多项默认全选，用户至少保留每种组件的一项。每个保留组合独立存为 option，最终课表每门课只用一个组合。linked recitation/lab 不提供独立 Add 按钮。
 - `CourseIntent` 表达课程是否必选、可选 option 范围、section 要求/排除/偏好。精确 option 锁定与 section 锁定语义不同。
@@ -148,6 +149,8 @@ flowchart LR
 课表外观由 `features/planner/calendarAppearance.ts` 提供纯函数：`calendarCourseTitle` 显示课程名称，移除已存 `Course.title` 开头重复的对应 `Course.code`，兼容旧导入数据；缺少课程记录时回退到 course ID。方块只显示名称和组件，不显示时间行或地点；时间轴、方块的位置与高度、左侧课程列表及下方组件时间摘要保留，不修改已存课程、时间或地点数据。颜色按完整已存课程列表的顺序分配不同色相，以 course ID 复用到同门课的所有组件；切换候选计划不重新配色。颜色不写入存储，也没有自定义设置。组件标签统一使用小写缩写（lecture 为 `lec`、recitation 为 `reci`）；缺少班次显示信息时保留原 section ID。时间定位由 `calendarLayout.ts` 负责。若当前候选包含周六或周日，则动态添加对应日期列；重新导入现有课程保持课程顺序和颜色稳定。验证见 `tests/features/calendarAppearance.test.ts` 和 `tests/e2e/extension.spec.ts`。
 
 ## 4. 本地状态与平台接口
+
+缩写设置由 `features/abbreviations` 的 `getConfiguredAbbreviations` 统一解析，Settings 与 Albert 标题、搜索共用结果。新设置中的 `abbreviations` 是完整可编辑列表，默认项与新增项在同一列表中修改、禁用或删除；显式空列表表示不使用任何缩写，不重新补入默认项。旧设置没有此字段时，按不区分大小写的缩写键合并内置默认值与 `customAbbreviations`，保留覆盖及禁用状态；Settings 保存时写入完整列表。`customAbbreviations` 仅为旧数据兼容保留。展开与搜索函数的可选第二参数接收完整列表，省略时使用内置默认值。验证见 `tests/features/abbreviations.test.ts`、`tests/entrypoints/contentAdapter.test.ts` 与设置页 E2E。
 
 | 存储键 | 所有者 / 契约 | 当前读写方 |
 | --- | --- | --- |

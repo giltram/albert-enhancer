@@ -203,16 +203,39 @@ test('multi-component courses are grouped and section actions preserve compatibl
   await worker!.evaluate(async () => { await chrome.storage.local.remove('planner'); });
 });
 
-test('settings persist and expose configurable highlights', async ({ extensionContext, extensionId }) => {
+test('settings persist editable defaults and custom abbreviations', async ({ extensionContext, extensionId }) => {
   const page = await extensionContext.newPage();
-  await page.goto(`chrome-extension://${extensionId}/options.html`);
-  await expect(page.getByText('ALBERT ENHANCER · v0.1.5')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Course highlights' })).toBeVisible();
-  await page.getByRole('button', { name: 'Add abbreviation' }).click();
-  await page.getByLabel('Abbreviation 1').fill('AI');
-  await page.getByLabel('Expansion 1').fill('Artificial Intelligence');
-  await page.getByRole('button', { name: 'Save settings' }).click();
-  await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible();
+  const [worker] = extensionContext.serviceWorkers();
+  const previousSettings = await worker!.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+  try {
+    await worker!.evaluate(async () => { await chrome.storage.local.remove('settings'); });
+    await page.goto(`chrome-extension://${extensionId}/options.html`);
+    await expect(page.getByText('ALBERT ENHANCER · v0.1.5')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Course highlights' })).toBeVisible();
+    const rows = page.locator('.abbreviation-row');
+    const algebra = rows.filter({ has: page.locator('input[value="LA"]') });
+    await algebra.getByRole('textbox').nth(1).fill('Custom algebra');
+    await algebra.getByRole('textbox').nth(0).fill('ALG');
+    await rows.filter({ has: page.locator('input[value="WAI"]') }).getByLabel('Enabled').uncheck();
+    await rows.filter({ has: page.locator('input[value="EAP"]') }).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Add abbreviation' }).click();
+    await rows.last().getByRole('textbox').nth(0).fill('AI');
+    await rows.last().getByRole('textbox').nth(1).fill('Artificial Intelligence');
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible();
+    await page.reload();
+    await expect(rows.filter({ has: page.locator('input[value="ALG"]') }).getByRole('textbox').nth(1)).toHaveValue('Custom algebra');
+    await expect(rows.filter({ has: page.locator('input[value="WAI"]') }).getByLabel('Enabled')).not.toBeChecked();
+    await expect(rows.filter({ has: page.locator('input[value="EAP"]') })).toHaveCount(0);
+    await expect(rows.filter({ has: page.locator('input[value="LA"]') })).toHaveCount(0);
+    await expect(rows.last().getByRole('textbox').nth(1)).toHaveValue('Artificial Intelligence');
+  } finally {
+    await page.close();
+    await worker!.evaluate(async (previous) => {
+      if (previous === undefined) await chrome.storage.local.remove('settings');
+      else await chrome.storage.local.set({ settings: previous });
+    }, previousSettings);
+  }
 });
 
 test('default semester persists, applies on opening, and preserves manual tab changes', async ({ extensionContext, extensionId }) => {
@@ -334,7 +357,7 @@ test('logged-in Albert Course Search iframe receives its actions and opens the r
   await search.getByRole('button', { name: 'School & abbreviation settings' }).click();
   const settingsPage = await settingsPagePromise;
   await expect(settingsPage.getByRole('heading', { name: 'School preference' })).toBeVisible();
-  await expect(settingsPage.getByRole('heading', { name: 'Custom abbreviations' })).toBeVisible();
+  await expect(settingsPage.getByRole('heading', { name: 'Abbreviations', exact: true })).toBeVisible();
 });
 
 test('session timeout helper clicks only the enabled expiry warning', async ({ extensionContext, extensionId }) => {

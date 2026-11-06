@@ -12,6 +12,28 @@ function section(index: number): Element {
 }
 
 describe('linked Albert component groups', () => {
+  it('imports Group Bamboo Flute as a complete standalone group instruction option', () => {
+    load('group-bamboo-flute.html');
+    const group = readSectionGroup(section(0));
+    expect(group).toMatchObject({
+      primary: {
+        term: 'spring 2027',
+        course: { id: 'MUS-SHU 151', title: 'Group Bamboo Flute: All Levels' },
+        section: { componentType: 'group-instruction', sectionCode: '001', classNumber: '17684' },
+      },
+      choices: [],
+    });
+    const options = optionsForSectionGroup(group!, []);
+    expect(options).toMatchObject([{
+      id: 'MUS-SHU 151:001',
+      sectionIds: ['MUS-SHU 151:001'],
+      components: [{ componentType: 'group-instruction', classNumber: '17684' }],
+      instructors: [{ name: 'Qian, Jun' }],
+      meetings: [{ day: 'tuesday', startMinute: 1035, endMinute: 1165, location: '567 West Yangsi Rd, Shanghai Room WB141' }],
+    }]);
+    expect(options).toHaveLength(1);
+  });
+
   it('pairs both Machine Learning lectures with their own recitation', () => {
     load('logged-in-machine-learning.html');
     expect(readSectionGroup(section(1))?.choices[0]?.sections.map((child) => child.section.classNumber)).toEqual(['18020']);
